@@ -1,0 +1,32 @@
+task main(){
+    int volume = 2;
+    SetSensorColorFull(IN_1);
+    while(TRUE){
+        OnFwd(OUT_BC, 25);
+        //if white is detected
+        if (Sensor(IN_1) == 6){
+            PlayToneEx(1760, 100, volume, FALSE);
+        }
+         //if yellow is detected
+        if (Sensor(IN_1) == 4){
+            PlayToneEx(1568, 100, volume, FALSE);
+        }
+         //if blue is detected
+        if (Sensor(IN_1) == 3){
+            PlayToneEx(1175, 100, volume, FALSE);
+        }
+         //if green is detected
+        if (Sensor(IN_1) == 2){
+            PlayToneEx(1319, 100, volume, FALSE);
+        }
+         //if black is detected
+        if (Sensor(IN_1) == 1){
+            PlayToneEx(1047, 100, volume, FALSE);
+        }
+         //if red is detected
+        if (Sensor(IN_1) == 5){
+            Off(OUT_BC);
+            break;
+        }
+    }
+}

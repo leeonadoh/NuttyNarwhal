@@ -1,0 +1,147 @@
+#define WHI 6
+#define RED 5
+#define YEL 4
+#define GRN 3
+#define BLU 2
+#define BLK 1
+
+/**
+* Use while robot is still moving. Samples an area of color 128
+* times, returning the color that occured the most.
+*/
+inline int getColor(){
+  int i;
+  int w = 0, r = 0, y = 0, g = 0, b = 0, k = 0;
+  for (i = 0; i < 90; i++){
+    int color = Sensor(IN_1);
+    if (color == WHI) w++;
+    else if (color == RED) r++;
+    else if (color == YEL) y++;
+    else if (color == GRN) b++;
+    else if (color == BLU) g++;
+    else if (color == BLK) k++;
+    Wait(1);
+  }
+  int max = 0;
+  int color = 0;
+  if (k > max){
+    max = k;
+    color = BLK;
+  }
+  if (b > max){
+    max = b;
+    color = BLU;
+  }
+  if (g > max){
+    max = g;
+    color = GRN;
+  }
+  if (y > max){
+    max = y;
+    color = YEL;
+  }
+  if (r > max){
+    max = r;
+    color = RED;
+  }
+  if (w > max) color = WHI;
+  return color;
+}
+
+/**
+* Moves the robot at specified speed untill a color has changed.
+* return: the changed color's value.
+*/
+inline int moveUntilColorChange(int speed){
+  int startColor = getColor(); // Starting color
+  OnFwd(OUT_BC, speed);
+  while (true){
+    int color = getColor();
+    if (startColor != color){
+      // Stop motor, break loop, and return color.
+      Off(OUT_BC);
+      return color;
+    }
+  }
+}
+
+inline void revFor(int speed, long ticks){
+  long t0 = CurrentTick();
+  OnRev(OUT_BC, speed);
+  until( (CurrentTick() - t0) > ticks);
+  Off(OUT_BC);
+}
+
+inline void right90(){
+  RotateMotorEx(OUT_BC, 25, 260, -100, true, false);
+  RotateMotor(OUT_BC, 20, 60);
+}
+
+inline void right180(){
+  RotateMotorEx(OUT_BC, 25, 520, -100, true, false);
+  RotateMotor(OUT_BC, 20, 120);
+}
+
+inline void left90(){
+  RotateMotorEx(OUT_BC, 25, 260, 100, true, false);
+  RotateMotor(OUT_BC, 20, 60);
+}
+
+inline void adjustR45(){
+  RotateMotorEx(OUT_BC, 25, 130, -100, true, false);
+}
+
+inline void adjustL45(){
+  RotateMotorEx(OUT_BC, 25, 130, 100, true, false);
+}
+
+inline void adjustR(){
+  RotateMotorEx(OUT_BC, 20, 20, -100, true, false);
+}
+
+inline void adjustL(){
+  RotateMotorEx(OUT_BC, 20, 20, 100, true, false);
+}
+
+inline void moveUntilColor(int speed, int c){
+  OnFwd(OUT_BC, speed);
+  while (true){
+    int color = getColor();
+    if (color == c){
+      Off(OUT_BC); // Stop motor, break loop
+      return;
+    }
+  }
+}
+
+inline void scanIntersection(){
+  adjustR45();
+  int currentColor = moveUntilColorChange(20);
+  if(currentColor == BLK){
+    moveUntilColorChange(-20);
+    // Sure we are on yellow?
+    adjustL45();
+    currentColor = moveUntilColorChange(20);
+  }
+
+  // play color sound
+  moveUntilColorChange(-20);
+  currentColor = moveUntilColorChange(-20);
+  // play color sound.
+  moveUntilColorChange(20);
+  adjustL45();
+  adjustL45();
+  currentColor = moveUntilColorChange(20);
+  // play color sound.
+  moveUntilColorChange(-20);
+  currentColor = moveUntilColorChange(-20);
+  // play color sound.
+  moveUntilColorChange(20);
+  adjustR45();
+}
+
+task main(){
+
+  SetSensorColorFull(IN_1);
+  scanIntersection();
+}
