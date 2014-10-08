@@ -379,7 +379,7 @@ intersection scan_surroundings(){
   moveUntilColor(25, YEL);
   adjustR45();
   
-    return rsense;
+  return rsense;
 }
 
 
@@ -456,10 +456,11 @@ int move_to(int s, int f, int h){
       heading = EAST;
     }
     int i;
-    for (i = 0; i < abs(tx); i++){
+    int absTx = abs(tx);
+    for (i = 0; i < absTx; i++){
       move_robot();
-      nudgeForward(); // To clear yellow.
-      // TODO: Dont want to nudge forward on last move.
+      if (i != absTx)
+        nudgeForward(); // To clear yellow.
     }
   }
 
@@ -472,10 +473,11 @@ int move_to(int s, int f, int h){
       heading = SOUTH;
     }
     int i;
-    for (i = 0; i < abs(ty); i++){
+    int absTy = abs(ty);
+    for (i = 0; i < absTy; i++){
       move_robot();
-      nudgeForward(); // To clear yellow.
-      // TODO: Dont want to nudge forward on last move.
+      if (i != absTy)
+        nudgeForward(); // To clear yellow.
     }
   }
   return heading;
@@ -580,188 +582,188 @@ int sense(intersection map[], int x, int y, int dir, int heading){
 */
 task main(){
 
-     /* variable declarations */
-     intersection map [GWIDTH *GHEIGHT]; /* holds map data */
-     
-     int guess[3]; /* holds x y and theta of the best guess at robot's position */
-     float robp = 0; /* holds the prob that the robot is at guess */
-     intersection rsense; /* holds data about the robot's surroundings */
+  /* variable declarations */
+  intersection map [GWIDTH *GHEIGHT]; /* holds map data */
 
-     particle list[GWIDTH*GHEIGHT*4]; /* list of particles */
-     int psense[4]; /* holds data on a particle's surroundings */
+  int guess[3]; /* holds x y and theta of the best guess at robot's position */
+  float robp = 0; /* holds the prob that the robot is at guess */
+  intersection rsense; /* holds data about the robot's surroundings */
 
-     int i, j; /* variables for loop counters */
-     int hits, misses; /* keeps track of how many of a particle's
-                          surroundings match the robot's */
-     float maxprob, totalprob;
-     
-     byte fd, charat;         /* variables for file descriptors and characters */
-     string line;
-     int target, dest; /* records the target and destination coordinates for use
-                          after finding the robot's position */
-     
-     /* sensor initialization */
-     SetSensorColorFull(IN_1);
+  particle list[GWIDTH*GHEIGHT*4]; /* list of particles */
+  int psense[4]; /* holds data on a particle's surroundings */
 
-     /* initialize the particle list, each coordinate has 4 particles, one for each direction */
-   for (i = 0; i < GWIDTH*GHEIGHT*4;i = i + 4){
-       list[i].x=(i/4)%GWIDTH;
-       list[i].y=i/(4*GWIDTH);
-       list[i].theta = NORTH;
-       list[i].prob = 1.0/(GWIDTH*GHEIGHT*4);
-       list[i+1].x=(i/4)%GWIDTH;
-       list[i+1].y=i/(4*GWIDTH);
-       list[i+1].theta = SOUTH;
-       list[i+1].prob = 1.0/(GWIDTH*GHEIGHT*4);
-       list[i+2].x=(i/4)%GWIDTH;
-       list[i+2].y=i/(4*GWIDTH);
-       list[i+2].theta = EAST;
-       list[i+2].prob = 1.0/(GWIDTH*GHEIGHT*4);
-       list[i+3].x=(i/4)%GWIDTH;
-       list[i+3].y=i/(4*GWIDTH);
-       list[i+3].theta = WEST;
-       list[i+3].prob = 1.0/(GWIDTH*GHEIGHT*4);
-   }
+  int i, j; /* variables for loop counters */
+  int hits, misses; /* keeps track of how many of a particle's
+                      surroundings match the robot's */
+  float maxprob, totalprob;
+
+  byte fd, charat;         /* variables for file descriptors and characters */
+  string line;
+  int target, dest; /* records the target and destination coordinates for use
+                      after finding the robot's position */
+
+  /* sensor initialization */
+  SetSensorColorFull(IN_1);
+
+  /* initialize the particle list, each coordinate has 4 particles, one for each direction */
+  for (i = 0; i < GWIDTH*GHEIGHT*4;i = i + 4){
+    list[i].x=(i/4)%GWIDTH;
+    list[i].y=i/(4*GWIDTH);
+    list[i].theta = NORTH;
+    list[i].prob = 1.0/(GWIDTH*GHEIGHT*4);
+    list[i+1].x=(i/4)%GWIDTH;
+    list[i+1].y=i/(4*GWIDTH);
+    list[i+1].theta = SOUTH;
+    list[i+1].prob = 1.0/(GWIDTH*GHEIGHT*4);
+    list[i+2].x=(i/4)%GWIDTH;
+    list[i+2].y=i/(4*GWIDTH);
+    list[i+2].theta = EAST;
+    list[i+2].prob = 1.0/(GWIDTH*GHEIGHT*4);
+    list[i+3].x=(i/4)%GWIDTH;
+    list[i+3].y=i/(4*GWIDTH);
+    list[i+3].theta = WEST;
+    list[i+3].prob = 1.0/(GWIDTH*GHEIGHT*4);
+  }
    
-   /* Initialize the map and target from file
+  /* Initialize the map and target from file
 
-      The format of the file:
-          - one line per intersection containing 4 integers seperated by spaces
-            these integers represent NE SE SW NW respectively
-          - the order of the intersections is rows top to bottom then columns
-            left to right
-          - after all the intersection data there are two lines with 2 integers
-            each. this describes the target and destination that the robot must
-            move to after finding its position
-            
-      Colour values are based on NXC colour sensor constants
+  The format of the file:
+    - one line per intersection containing 4 integers seperated by spaces
+      these integers represent NE SE SW NW respectively
+    - the order of the intersections is rows top to bottom then columns
+      left to right
+    - after all the intersection data there are two lines with 2 integers
+      each. this describes the target and destination that the robot must
+      move to after finding its position
       
-      Array format:
-            - indices are obtained using the formula i = GHEIGHT*x + y
-            - each index contains an interesction element that holds information
-              about it's surroundings
-      */
-   fd = fopen(FILENAME, "r");
-   /* read as many lines as there are squares on the grid */
-   for (i=0; i < GWIDTH*GHEIGHT; i++){
-       fgets(line, READSIZE, fd);
-       /* parse each line into the coresponding directions and store them in
-          the map data array */
-       for (j = 0; j < 7; j = j + 2){
-           charat = StrIndex(line, j);
-           switch (j){
-                  case 0:
-                       map[i].NE = ASCII_TO_INT(charat);
-                       break;
-                  case 2:
-                       map[i].SE = ASCII_TO_INT(charat);
-                       break;
-                  case 4:
-                       map[i].SW = ASCII_TO_INT(charat);
-                       break;
-                  case 6:
-                       map[i].NW = ASCII_TO_INT(charat);
-                       break;
-           }
-       }
-   }
-   /* read information about the target which should be following the map data */
-   fgets(line, READSIZE, fd);
-   charat = StrIndex(line,0);
-   target = ASCII_TO_INT(charat);
-   target = target*GHEIGHT; // add x coordinate calculation
-   charat = StrIndex(line,2);
-   target = target + ASCII_TO_INT(charat); // add y coordinate
-        
-   /* read information about the destination which sould be following the target data */
-   fgets(line, READSIZE, fd);
-   charat = StrIndex(line,0);
-   dest = ASCII_TO_INT(charat);
-   dest = dest*GHEIGHT; // add x coordinate calculation
-   charat = StrIndex(line,2);
-   dest = dest + ASCII_TO_INT(charat); // add y coordinate
+  Colour values are based on NXC colour sensor constants
 
-   fclose(fd); /* file reading finished */
+  Array format:
+    - indices are obtained using the formula i = GHEIGHT*x + y
+    - each index contains an interesction element that holds information
+      about it's surroundings
+  */
+  fd = fopen(FILENAME, "r");
+  /* read as many lines as there are squares on the grid */
+  for (i=0; i < GWIDTH*GHEIGHT; i++){
+    fgets(line, READSIZE, fd);
+    /* parse each line into the coresponding directions and store them in
+      the map data array */
+    for (j = 0; j < 7; j = j + 2){
+      charat = StrIndex(line, j);
+      switch (j){
+        case 0:
+          map[i].NE = ASCII_TO_INT(charat);
+          break;
+        case 2:
+          map[i].SE = ASCII_TO_INT(charat);
+          break;
+        case 4:
+          map[i].SW = ASCII_TO_INT(charat);
+          break;
+        case 6:
+          map[i].NW = ASCII_TO_INT(charat);
+          break;
+      }
+    }
+  }
+  /* read information about the target which should be following the map data */
+  fgets(line, READSIZE, fd);
+  charat = StrIndex(line,0);
+  target = ASCII_TO_INT(charat);
+  target = target*GHEIGHT; // add x coordinate calculation
+  charat = StrIndex(line,2);
+  target = target + ASCII_TO_INT(charat); // add y coordinate
+      
+  /* read information about the destination which sould be following the target data */
+  fgets(line, READSIZE, fd);
+  charat = StrIndex(line,0);
+  dest = ASCII_TO_INT(charat);
+  dest = dest*GHEIGHT; // add x coordinate calculation
+  charat = StrIndex(line,2);
+  dest = dest + ASCII_TO_INT(charat); // add y coordinate
 
-   /* main execution loop for particle filter
+  fclose(fd); /* file reading finished */
 
-      How particle filters work:
+  /* main execution loop for particle filter
 
-      Normally we would have a list of particles initilalized with random
-      coordinates and headings.
+    How particle filters work:
 
-      At each iteration of the loop, we move the robot and the particles.
-      Surroundings for both are examined and compared.
-      
-      Particles which have surroundings that seem close to the robots are given
-      larger weights compared to those that don't.
-      
-      We then choose from the particles in a way that the particles with higher
-      weights are likley to remain, while particles with smaller weights are
-      eliminated. This is called resampling.
-      
-      After several iterations, we would have a group of particles which is
-      very likley to represent the robot's actual position.
-      
-      How this implementation works:
-      
-      We have simplified the large possibility of coordinates to a grid.
-      
-      === Particle List ===
-      For each intersection on the grid map, we have four particles.
-      One for each of north, east, south, and west, which the robot could be
-      facing since it will move vertically and horizontally.
-      These are all the possible starting positions and headings the robot could
-      have.
-      
-      === Updating weights ===
-      Each iteration we reasign the particle weights.
-      We move the robot, and also the particles.
-      The surroundings, being the four coloured squares around the intersection
-      are checked. The robot's and particles surroundings are compared and the
-      weights are changed based on whether they match or not.
-      
-      === Resampling ==
-      Take note that we do NOT do resampling in this implementation.
-      Instead we have a probability threshold that a particle must pass to be
-      accepted as the actual position of the robot.
-      
-   */
+    Normally we would have a list of particles initilalized with random
+    coordinates and headings.
+
+    At each iteration of the loop, we move the robot and the particles.
+    Surroundings for both are examined and compared.
+    
+    Particles which have surroundings that seem close to the robots are given
+    larger weights compared to those that don't.
+    
+    We then choose from the particles in a way that the particles with higher
+    weights are likley to remain, while particles with smaller weights are
+    eliminated. This is called resampling.
+    
+    After several iterations, we would have a group of particles which is
+    very likley to represent the robot's actual position.
+    
+    How this implementation works:
+    
+    We have simplified the large possibility of coordinates to a grid.
+    
+    === Particle List ===
+    For each intersection on the grid map, we have four particles.
+    One for each of north, east, south, and west, which the robot could be
+    facing since it will move vertically and horizontally.
+    These are all the possible starting positions and headings the robot could
+    have.
+    
+    === Updating weights ===
+    Each iteration we reasign the particle weights.
+    We move the robot, and also the particles.
+    The surroundings, being the four coloured squares around the intersection
+    are checked. The robot's and particles surroundings are compared and the
+    weights are changed based on whether they match or not.
+    
+    === Resampling ==
+    Take note that we do NOT do resampling in this implementation.
+    Instead we have a probability threshold that a particle must pass to be
+    accepted as the actual position of the robot.
+    
+  */
    
-   ////////////////////////////////////////////////////////////////////////////
-   // TO DO:
-   //
-   // Write the main particle filter execution loop. It will loop until a
-   // particle weight reaches the threshold
-   //
-   // At each iteration the following steps take place:
-   //    - robot checks its surroundings
-   //    - each particle checks its surroundings and compares them with the
-   //      robot's
-   //    - adjust particle weights based on the comparison
-   //    - normalize particle weights
-   //    - find the best guess of the robot's position
-   //    - move the robot and the particles forward to the next intersection
-   //
-   /////////////////////////////////////////////////////////////////////////////
-   while (robp < THRESHOLD){ /* run the update loop until an acceptable
-                               probability is obtained */
-      /* implement me */
-   }
-   PlayToneEx(Random(1000) + 200, 400, 3, FALSE);
-   
-   /* When we are fairly confident about the robot's position, we can move on
-      to the task given.
-      
-      Once the robot has found where it is, it must head to the target given in
-      the initialization file.
-      After picking up the confidential item at the target point it must move to
-      the delivery point given by the destination from the initialization file.
-      
-   */
-   guess[2] = move_to(guess[0]*GHEIGHT + guess[1], target, guess[2]);
-   PlayToneEx(Random(1000) + 200, 400, 3, FALSE);
-   move_to(target, dest,guess[2]);
-   PlayToneEx(Random(1000) + 200, 400, 3, FALSE);
+  ////////////////////////////////////////////////////////////////////////////
+  // TO DO:
+  //
+  // Write the main particle filter execution loop. It will loop until a
+  // particle weight reaches the threshold
+  //
+  // At each iteration the following steps take place:
+  //    - robot checks its surroundings
+  //    - each particle checks its surroundings and compares them with the
+  //      robot's
+  //    - adjust particle weights based on the comparison
+  //    - normalize particle weights
+  //    - find the best guess of the robot's position
+  //    - move the robot and the particles forward to the next intersection
+  //
+  /////////////////////////////////////////////////////////////////////////////
+  while (robp < THRESHOLD){ /* run the update loop until an acceptable
+                             probability is obtained */
+    /* implement me */
+  }
+  PlayToneEx(Random(1000) + 200, 400, 3, FALSE);
+
+  /* When we are fairly confident about the robot's position, we can move on
+    to the task given.
+    
+    Once the robot has found where it is, it must head to the target given in
+    the initialization file.
+    After picking up the confidential item at the target point it must move to
+    the delivery point given by the destination from the initialization file.
+    
+  */
+  guess[2] = move_to(guess[0]*GHEIGHT + guess[1], target, guess[2]);
+  PlayToneEx(Random(1000) + 200, 400, 3, FALSE);
+  move_to(target, dest,guess[2]);
+  PlayToneEx(Random(1000) + 200, 400, 3, FALSE);
 }
 
