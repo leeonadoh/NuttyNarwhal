@@ -110,10 +110,10 @@ struct intersection{
 * Use while robot is still moving. Samples an area of color 128
 * times, returning the color that occured the most.
 */
-inline int getColor(){
+inline int getColor(int samples = 72){
   int i;
   int w = 0, r = 0, y = 0, g = 0, b = 0, k = 0;
-  for (i = 0; i < 72; i++){
+  for (i = 0; i < samples; i++){
     int color = Sensor(IN_1);
     if (color == WHI) w++;
     else if (color == RED) r++;
@@ -178,13 +178,12 @@ int moveUntilBuilding(int speed, int currentColor, bool crossRoad){
   int color;
   bool colorChanged = false; // Stays false untill a color change is detected.
   while (true){
-    color = getColor();
+    color = getColor(180);
     // Condition given to start recognizing building colors.
     if (color != currentColor && (!crossRoad || (color == YEL || color == BLK))) colorChanged = true;
     if (colorChanged && (color == GRN || color == BLU || color == WHI)){
       // If color changed from currentColor, and a new building color has been registered,
       // wait a while for the bot to overshoot into the color block and return the reading.
-      Wait(150);
       Off(OUT_BC);
       return color;
     }
@@ -198,7 +197,7 @@ void moveUntilColor(int speed, int c){
   OnFwdSync(OUT_BC, speed, 0);
   int color;
   while (true){
-    color = getColor();
+    color = getColor(100);
     if (color == c){
       Off(OUT_BC);
       return;
@@ -231,10 +230,6 @@ inline void left90(){
   nudgeForward();
 }
 
-inline void nudgeForward(){
-  RotateMotor(OUT_BC, 20, 90);
-}
-
 inline void adjustR45(){
   RotateMotorEx(OUT_BC, 25, 140, -100, true, true);
 }
@@ -247,18 +242,22 @@ inline void adjustL90(){
   RotateMotorEx(OUT_BC, 25, 270, 100, true, true);
 }
 
+inline void nudgeForward(){
+  RotateMotor(OUT_BC, 20, 90);
+}
+
 inline void adjustToBlack(){
   bool adjDir = true; // true --> right
   bool adjCount = 0;
-  while(getColor() != BLK){
-    if (adjCount == 4){
-      if (adjDir) 
-        RotateMotor(OUT_B, -25, 360);
-      else 
-        RotateMotor(OUT_C, -25, 360);
+  while(getColor(128) != BLK){
+    if (adjCount == 5){
+      if (adjDir)
+        RotateMotor(OUT_B, -25, 450);
+      else
+        RotateMotor(OUT_C, -25, 450);
       adjDir = !adjDir;
       adjCount = 0;
-    } 
+    }
     if (adjDir)
       RotateMotor(OUT_B, 25, 90);
     else
@@ -305,13 +304,13 @@ sub move_robot(){
       adjustToBlack();
     }
     else if (curColor != BLK){
-      if (t1 > 1200) 
+      if (t1 > 1200)
         moveUntilColor(-30, BLK);
-      else 
-        revFor(30, t1 * 0.75);
-      if (t1 >= t0) 
+      else
+        revFor(30, t1 * 0.7);
+      if (t1 >= t0)
         d1 = d0; // Previous turn was a good decision. Fix using same turn.
-      else 
+      else
         d1 = !d0; // Previous turn was not a good decision. Fix by turning oposite way.
       if (d1) {adjustR(20);}
       else {adjustL(20);}
@@ -340,13 +339,13 @@ intersection scan_surroundings(){
   //
   ////////////////////////////////////////////////////////////////////////////
 
-  int pinpointF = 97;  // Some angle movement values used to pinpoint the bot's
-  int pinpointB = 100; // orientation on the yellow square.
+  int pinpointF = 94;  // Some angle movement values used to pinpoint the bot's
+  int pinpointB = 96; // orientation on the yellow square.
 
   // Move 45 degreese first to attempt to allign to NE building.
   adjustR45();
   RotateMotor(OUT_BC, 25, pinpointF);
-  int currentColor = getColor();
+  int currentColor = getColor(128);
   bool adjusted = false;
 
   // Attempt to fix error if a black was reaad.
@@ -355,7 +354,7 @@ intersection scan_surroundings(){
     RotateMotor(OUT_BC, -25, pinpointB);
     adjustR(60);
     RotateMotor(OUT_BC, 25, pinpointF);;
-    currentColor = getColor();
+    currentColor = getColor(128);
   }
   // if (adjusted){
   //   RotateMotor(OUT_BC, -20, pinpointB);
@@ -365,17 +364,17 @@ intersection scan_surroundings(){
   TextOut(8, 8, NumToStr(currentColor));
   rsense.NE = currentColor;
   Wait(250);
-  currentColor = moveUntilBuilding(-25, currentColor, true);
+  currentColor = moveUntilBuilding(-30, currentColor, true);
   TextOut(8, 8, NumToStr(currentColor));
   rsense.SW = currentColor;
   Wait(250);
   moveUntilColor(25, YEL);
   adjustL90();
-  currentColor = moveUntilBuilding(25, YEL, false);
+  currentColor = moveUntilBuilding(30, YEL, false);
   TextOut(8, 8, NumToStr(currentColor));
   rsense.NW = currentColor;
   Wait(250);
-  currentColor = moveUntilBuilding(-25, currentColor, true);
+  currentColor = moveUntilBuilding(-30, currentColor, true);
   TextOut(8, 8, NumToStr(currentColor));
   rsense.SE = currentColor;
   Wait(250);
