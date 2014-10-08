@@ -49,9 +49,12 @@
 
    decide these values for yourself
    */
-#define THRESHOLD
-#define MATCH
-#define MISMATCH
+#define THRESHOLD = 0.95
+#define MATCH = 1
+#define MISMATCH1 = 0.9
+#define MISMATCH2 = 0.8
+#define MISMATCH3 = 0.7
+#define MISMATCH4 = 0.6
 
 /* You may want to define macros to keep track of certain turning angles and
    speeds throughout your code. This provides an easy way to change them */
@@ -748,7 +751,17 @@ task main(){
   /////////////////////////////////////////////////////////////////////////////
   while (robp < THRESHOLD){ /* run the update loop until an acceptable
                              probability is obtained */
-    /* implement me */
+    move_robot();
+    //check robots surrounding
+    scan_surroundings();
+    //check each particles surroundings
+    int i;
+    for(i = 0; i < 3; i ++){
+		int j;
+		for(j = 0; j < 3; j ++){
+			sense(map[], i, j, int dir, int heading);
+		}
+    }
   }
   PlayToneEx(Random(1000) + 200, 400, 3, FALSE);
 
