@@ -63,10 +63,12 @@
 #define BLU 2
 #define BLK 1
 
-#define scanMoveFull(speed) RotateMotor(OUT_BC, speed, 270);
-#define scanMoveHalf(speed) RotateMotor(OUT_BC, speed, 140);
-#define adjustR(angle) RotateMotorEx(OUT_BC, 20, angle, -100, true, false);
-#define adjustL(angle) RotateMotorEx(OUT_BC, 20, angle, 100, true, false);
+#define scanMoveFull(speed) RotateMotor(OUT_BC, speed, 270)
+#define scanMoveHalf(speed) RotateMotor(OUT_BC, speed, 140)
+#define adjustR(angle) RotateMotorEx(OUT_BC, 20, angle, -100, true, false)
+#define adjustL(angle) RotateMotorEx(OUT_BC, 20, angle, 100, true, false)
+#define coordToIndex(x, y) return y * 3 + x
+#define absDirection(heading, dir) (heading + dir) % 4 + 1000
 
 /* Represents a single particle.
 
@@ -213,16 +215,20 @@ inline void revFor(int speed, long ticks){
 
 inline void right90(){
   RotateMotorEx(OUT_BC, 25, 270, -100, true, false);
-  RotateMotor(OUT_BC, 20, 90);
+  nudgeForward();
 }
 
 inline void right180(){
   RotateMotorEx(OUT_BC, 25, 530, -100, true, false);
-  RotateMotor(OUT_BC, 20, 110);
+  nudgeForward();
 }
 
 inline void left90(){
   RotateMotorEx(OUT_BC, 25, 270, 100, true, false);
+  nudgeForward();
+}
+
+inline void nudgeForward(){
   RotateMotor(OUT_BC, 20, 90);
 }
 
@@ -258,9 +264,6 @@ inline void adjustToBlack(){
   }
 }
 
-inline int coordToIndex(int x, int y){
-    return y * 3 + x;
-}
 
 /* Subroutine which moves the robot forward from one intersection to the next
 */
@@ -444,6 +447,37 @@ int move_to(int s, int f, int h){
   // makes turns.
   //
   ////////////////////////////////////////////////////////////////////////////
+  if (tx != 0){
+    if (tx < 0){
+      change_direction(heading, WEST);
+      heading = WEST;
+    } else {
+      change_direction(heading, EAST);
+      heading = EAST;
+    }
+    int i;
+    for (i = 0; i < abs(tx); i++){
+      move_robot();
+      nudgeForward(); // To clear yellow.
+      // TODO: Dont want to nudge forward on last move.
+    }
+  }
+
+  if (ty != 0){
+    if (ty < 0){
+      change_direction(heading, NORTH);
+      heading = NORTH;
+    } else {
+      change_direction(heading, SOUTH);
+      heading = SOUTH;
+    }
+    int i;
+    for (i = 0; i < abs(ty); i++){
+      move_robot();
+      nudgeForward(); // To clear yellow.
+      // TODO: Dont want to nudge forward on last move.
+    }
+  }
   return heading;
 }
 
@@ -511,25 +545,34 @@ particle move(particle p){
 */
 int sense(intersection map[], int x, int y, int dir, int heading){
 
-    ////////////////////////////////////////////////////////////////////////////
-    // TO DO:
-    //
-    // Implement the function which checks the surroundings of the particle at
-    // (x, y) facing the direction given by heading.
-    //
-    // The data you need to determine the particle's surroundings is given by
-    // the map data array.
-    //
-    // The integer returned is the
-    // colour of the square in the direction of dir which is one of NE, SE, SW,
-    // or NW.
-    // Keep in mind that the direction is relative to the heading as mentioned
-    // in the function description.
-    //
-    ////////////////////////////////////////////////////////////////////////////
+  ////////////////////////////////////////////////////////////////////////////
+  // TO DO:
+  //
+  // Implement the function which checks the surroundings of the particle at
+  // (x, y) facing the direction given by heading.
+  //
+  // The data you need to determine the particle's surroundings is given by
+  // the map data array.
+  //
+  // The integer returned is the
+  // colour of the square in the direction of dir which is one of NE, SE, SW,
+  // or NW.
+  // Keep in mind that the direction is relative to the heading as mentioned
+  // in the function description.
+  //
+  ////////////////////////////////////////////////////////////////////////////
 
-
-    return -1; // you may need to remove this
+  // Convert heading and relative dir (to heading) to absolute direction (relative to north)
+  int absDir = absDirection(heading, dir);
+  // Return the color
+  if (absDir == NORTHEAST)
+    return map[coordToIndex(x, y)].NE;
+  if (absDir == SOUTHEAST)
+    return map[coordToIndex(x, y)].SE;
+  if (absDir == SOUTHWEST)
+    return map[coordToIndex(x, y)].SW;
+  if (absDir == NORTHWEST)
+    return map[coordToIndex(x, y)].NW;
 }
 
 /* The main task which initializes data
