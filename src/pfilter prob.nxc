@@ -754,11 +754,14 @@ task main(){
     //check robots surrounding
     scan_surroundings();
     //check each particles surroundings
-    int i;
-    for(i = 0; i < 3; i ++){
-		int j;
-		for(j = 0; j < 5; j ++){
-			sense(map[], i, j, int dir, int heading); //in progress
+    int index;
+    for(index = 0; index < 60; index ++){
+		interesction particleIntersection; //holds current particle intersection scan info
+		//scan each direction of current intersection 
+		particleIntersection.NE = sense(map[], list[index].x, list[index].y, NE, list[index].theta);
+		particleIntersection.SE = sense(map[], list[index].x, list[index].y, SE, list[index].theta);
+		particleIntersection.SW = sense(map[], list[index].x, list[index].y, SW, list[index].theta);
+		particleIntersection.NW = sense(map[], list[index].x, list[index].y, NW, list[index].theta);
 		}
     }
   }
