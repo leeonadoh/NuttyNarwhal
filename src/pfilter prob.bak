@@ -290,10 +290,9 @@ long t0, t1;
   t0 = 0;
   d0 = false;
 
+  adjustToBlack();
   // Assume we start on black.
   while(true){
-    if (getColor() != BLK)
-      adjustToBlack();
     sTime = CurrentTick();
     int curColor = moveUntilColorChange(30);
     Wait(100);
