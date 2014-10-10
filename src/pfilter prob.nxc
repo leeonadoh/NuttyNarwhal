@@ -50,11 +50,7 @@
    decide these values for yourself
    */
 #define THRESHOLD 0.8
-#define MATCH 4.0
-#define MISMATCH1 3.0
-#define MISMATCH2 2.0
-#define MISMATCH3 1.0
-#define MISMATCH4 0.1
+// mismatch values are now defined in the start of main method
 
 /* You may want to define macros to keep track of certain turning angles and
    speeds throughout your code. This provides an easy way to change them */
