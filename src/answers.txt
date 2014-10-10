@@ -9,7 +9,13 @@ The sensor does not always give accurate readings. Our solution was to take mult
 //how did we test this?
 
 4)
-As each particle moves, its intersection is compared to the robot's intersection. Depending on the number of colors that match the robot, the particle gets a different probability with more matches having higher probability and smaller mathes having lower probability. 
+As each particle moves, its intersection is compared to the robot's intersection. Each of the 4 colors is compared to the 4 colors from the robot's location. Depending on the number of colors that match the robot, the particle gets a different probability with more matches having higher probability and less matches having lower probability. i.e. An intersection with 3/4 colors the same will have a greater probability than a particle with 1/4 matches. Since we do not want to completely get rid of of particles that do not have an exact match, we give them a lower probability and still consider them as having a small chance of being the robot's position.  
+
+//probabily values?
+//agreement?
+
+6)
+After the particles move and get re-evaluate their probabilites, particles that continue to have closer intersectoin matches to the robot's intersections continue to get a larger and larger probability until one particle holds the probability aproaching 1. This particle is clearly our best guess to the robot's location and to a great degree we can consider it to be the robot's location. Therefore we have a high threshold to detect the particle that has probability approaching 1. 
 9)
 yes external factors can affect the ability of the robot to find itself. During testing we realized that some colors were read wrong, however they were read correctly after shining a white light under the senor.
 10)
