@@ -1,0 +1,18 @@
+1)
+60 probabilities
+4 @ each intersection
+2)
+1/#of particles -> 1/60
+3)
+The sensor does not always give accurate readings. Our solution was to take multiple samples while the robot was moving in order to give readings from a varitey of sources rather than one source which could be affected by noise.This should work because it takes readings from multiple sources in which factors such as lighting change. 
+
+//how did we test this?
+
+4)
+As each particle moves, its intersection is compared to the robot's intersection. Depending on the number of colors that match the robot, the particle gets a different probability with more matches having higher probability and smaller mathes having lower probability. 
+9)
+yes external factors can affect the ability of the robot to find itself. During testing we realized that some colors were read wrong, however they were read correctly after shining a white light under the senor.
+10)
+On average our robot needs to scan about 5 intersections before finding itself.
+11)
+Intersections that are similar or exactly the same with other intersections make it harder in determining the robots position because multiple particles have large probabilities. Also, starting at angles to the road make it slightly more difficult because it requires the robot to do additoinal work to correct itself on the road.
