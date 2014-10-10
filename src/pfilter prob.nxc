@@ -62,8 +62,7 @@
 #define BLU 2
 #define BLK 1
 
-#define scanMoveFull(speed) RotateMotor(OUT_BC, speed, 270);
-#define scanMoveHalf(speed) RotateMotor(OUT_BC, speed, 140);
+/* Some movement and math macros */
 #define adjustR(angle) RotateMotorEx(OUT_BC, 20, angle, -100, true, false);
 #define adjustL(angle) RotateMotorEx(OUT_BC, 20, angle, 100, true, false);
 #define coordToIndex(x, y) (5 * x) + y
@@ -103,13 +102,17 @@ struct intersection{
 */
 
 /**
-* Use while robot is still moving. Samples an area of color 128
-* times, returning the color that occured the most.
+* Gets the color from sensor using multiple samples. Defaults to 72.
+* Assuming a zero-mean gaussian model for the noise, an average over
+* a set of samples should give us a good reading.
 */
 inline int getColor(int samples = 72){
   int i;
+  // Counters for each individual color. k is black.
   int w = 0, r = 0, y = 0, g = 0, b = 0, k = 0;
   for (i = 0; i < samples; i++){
+    // Sample for however samples given, waiting two milliseconds in between
+    // Increment the read color on each sample.
     int color = Sensor(IN_1);
     if (color == WHI) w++;
     else if (color == RED) r++;
@@ -119,6 +122,7 @@ inline int getColor(int samples = 72){
     else if (color == BLK) k++;
     Wait(2);
   }
+  // Return the color with the highest counter.
   int max = 0;
   int color = 0;
   if (k > max){
@@ -152,7 +156,10 @@ inline int getColor(int samples = 72){
 int moveUntilColorChange(int speed){
   int startColor = getColor(); // Starting color
   int color;
+  // Using on fwd sync to provide better wheel synchronization.
   OnFwdSync(OUT_BC, speed, 0);
+  // Keep moving forward untill a color that is different from the start 
+  // color is read.
   while (true){
     color = getColor();
     if (startColor != color){
@@ -164,10 +171,12 @@ int moveUntilColorChange(int speed){
 }
 
 /**
-* Assumes the bot is already on a building. Will only register once a color
-* change is detected.
-* When crossRoad is true, black or yellow must be crossed in order for a building
-* to be registered.
+* Move the robot forward untill a building color is detected. Current color is given 
+* so that if the robot is already on a building, it wont register as valid untill a 
+* different color from current color is read. 
+* When crossRoad is true, black or yellow must be crossed in order for a building color
+* to register as valid. 
+* return: the building color that ended up being registered. 
 */
 int moveUntilBuilding(int speed, int currentColor, bool crossRoad){
   OnFwdSync(OUT_BC, speed, 0);
@@ -176,10 +185,11 @@ int moveUntilBuilding(int speed, int currentColor, bool crossRoad){
   while (true){
     color = getColor(180);
     // Condition given to start recognizing building colors.
+    // When crossRoad is false, the right side of the and statement is ignored (is true).
+    // Otherwise, the left side is considered: a black or yellow must be read for colorChanged
+    // to be set to true.
     if (color != currentColor && (!crossRoad || (color == YEL || color == BLK))) colorChanged = true;
     if (colorChanged && (color == GRN || color == BLU || color == WHI)){
-      // If color changed from currentColor, and a new building color has been registered,
-      // wait a while for the bot to overshoot into the color block and return the reading.
       Off(OUT_BC);
       return color;
     }
@@ -187,7 +197,7 @@ int moveUntilBuilding(int speed, int currentColor, bool crossRoad){
 }
 
 /**
-* Moves forward untill a color is hit.
+* Move forward at given speed untill the given color is hit.
 */
 void moveUntilColor(int speed, int c){
   OnFwdSync(OUT_BC, speed, 0);
@@ -202,7 +212,7 @@ void moveUntilColor(int speed, int c){
 }
 
 /**
-* Goes in reverse for the specified number of ticks.
+* Goes in reverse at the specified speed for the given number of clock ticks.
 */
 inline void revFor(int speed, long ticks){
   long t0 = CurrentTick();
@@ -211,53 +221,65 @@ inline void revFor(int speed, long ticks){
   Off(OUT_BC);
 }
 
+/* Nudge the robot forward a bit at a default speed of 20*/
 inline void nudgeForward(int speed = 20){
   RotateMotor(OUT_BC, speed, 80);
 }
 
+/* Turn robot right 90 deg */
 inline void right90(){
   RotateMotorEx(OUT_BC, 25, 270, -100, true, false);
   nudgeForward();
 }
 
+/* Turn robot right 180 deg */
 inline void right180(){
   RotateMotorEx(OUT_BC, 25, 530, -100, true, false);
   nudgeForward();
 }
 
+/* Turn robot left 90 deg */
 inline void left90(){
   RotateMotorEx(OUT_BC, 25, 270, 100, true, false);
   nudgeForward();
 }
 
+/* Turn robot right 45 deg, without nudging it after. */
 inline void adjustR45(){
   RotateMotorEx(OUT_BC, 25, 140, -100, true, true);
 }
 
+/* Turn robot left 45 deg, without nudging it after. */
 inline void adjustL45(){
   RotateMotorEx(OUT_BC, 25, 140, 100, true, true);
 }
 
+/* Turn robot left 90 deg, without nudging it after. */
 inline void adjustL90(){
   RotateMotorEx(OUT_BC, 25, 270, 100, true, true);
 }
 
+/**
+* Turn both wheels independantly forward, turning one wheel first for 5 tries,
+* returning to the starting position, then turning the other wheel for 5. 
+* This is used to attempt to relocate the robot's sensor back on black.
+*/
 inline void adjustToBlack(){
   bool adjDir = true; // true --> right
   bool adjCount = 0;
   while(getColor(128) != BLK){
     if (adjCount == 5){
       if (adjDir)
-        RotateMotor(OUT_B, -25, 450);
+        RotateMotor(OUT_B, -40, 450);
       else
-        RotateMotor(OUT_C, -25, 450);
+        RotateMotor(OUT_C, -40, 450);
       adjDir = !adjDir;
       adjCount = 0;
     }
     if (adjDir)
-      RotateMotor(OUT_B, 25, 90);
+      RotateMotor(OUT_B, 30, 90);
     else
-      RotateMotor(OUT_C, 25, 90);;
+      RotateMotor(OUT_C, 30, 90);;
     adjCount += 1;
   }
 }
@@ -279,42 +301,53 @@ sub move_robot(){
   //
   ////////////////////////////////////////////////////////////////////////////
 
-long t0, t1;
-  bool d0, d1;
+  long t0, t1; // To keep track of current time taken (t1), and previous time taken(t0).
+  bool d0, d1; // To keep track of current direction(d1), and previous direction taken(d0).
   long sTime;
 
   t0 = 0;
-  d0 = false;
+  d0 = false; // true -> adjust right. Left otherwise. 
 
-  // Assume we start on black.
+  // Assume we start somewhere near black, if not on it.
   while(true){
+    // If current color is not black, we need to adjust the sensor so that it is on it.
     if (getColor() != BLK)
       adjustToBlack();
+    // Keep track of start time, using the current processor tick.
     sTime = CurrentTick();
+    // Move untill a color changed. Assuming we're on black, this color change means
+    // the robot is not on black anymore.
     int curColor = moveUntilColorChange(30);
-    Wait(100);
-    t1 = CurrentTick() - sTime;
+    t1 = CurrentTick() - sTime; // Store the time we spent staying on black.
     if (curColor == YEL){
+      // Stop if on intersection.
       return;
     }
     else if (curColor == RED){
+      // 180 if on red.
       right180();
-      adjustToBlack();
     }
     else if (curColor != BLK){
-      //if (t1 > 1200)
-      //  moveUntilColor(-30, BLK);
-      //else
-      revFor(30, t1 * 0.65);
+      // Means we most likely went off the road. Move robot back and adjust direction.
+      // Go in reverse the time we took to go forward. 0.7 is used to scale the time, since
+      // for some reason, the robot moves backwards more than going forward. 
+      revFor(30, t1 * 0.7);
       if (t1 >= t0)
-        d1 = d0; // Previous turn was a good decision. Fix using same turn.
+        // If our current time we stayed on black for was better than before, that means
+        // we are on our path to the right orientation. Adjust in the same direction as the
+        // previous adjustment. 
+        d1 = d0; 
       else
-        d1 = !d0; // Previous turn was not a good decision. Fix by turning oposite way.
-      if (d1) {adjustR(40);}
-      else {adjustL(40);}
+        // Otherwise, our previous turn made our time on black shorter, and is therefore a bad 
+        // adjustment. We adjust the oposite way. 
+        d1 = !d0;
+      // Execute the adjustment based upon the d1 value calculated above.
+      if (d1) {adjustR(30);}
+      else {adjustL(30);}
     }
-    // Shift t1, d1 to t0, d0
 
+    // Shift t1, d1 to t0, d0 to set the current readings to the previous readings in
+    // preparation for the next round.
     t0 = t1;
     d0 = d1;
   }
@@ -346,7 +379,8 @@ intersection scan_surroundings(){
   int currentColor = getColor(128);
   bool adjusted = false;
 
-  // Attempt to fix error if a black was reaad.
+  // Attempt to fix error if a black was read. This attepmpts to allign the robot
+  // to the NE building, if it entered the intersection at a bad angle. 
   while (currentColor == BLK || currentColor == YEL){
     adjusted = true;
     RotateMotor(OUT_BC, -25, pinpointB);
@@ -354,25 +388,27 @@ intersection scan_surroundings(){
     RotateMotor(OUT_BC, 25, pinpointF);;
     currentColor = getColor(128);
   }
-
-  //TextOut(8, 8, NumToStr(currentColor));
+  // If the while loop above exited, we are now on a building color.
+  // Read NE building.
   rsense.NE = currentColor;
   Wait(250);
+  // Move to SW building and read color.
   currentColor = moveUntilBuilding(-30, currentColor, true);
   rsense.SW = currentColor;
-  //TextOut(8, 8, NumToStr(currentColor));
   Wait(250);
+  // Move back to yellow, and turn left 90 to allign to NW building.
   moveUntilColor(25, YEL);
   adjustL90();
-  nudgeForward();
+  nudgeForward(25);
+  // Move to NW building and read color.
   currentColor = moveUntilBuilding(30, YEL, false);
   rsense.NW = currentColor;
-  //TextOut(8, 8, NumToStr(currentColor));
   Wait(250);
+  // Move to SE building and read color.
   currentColor = moveUntilBuilding(-30, currentColor, true);
   rsense.SE = currentColor;
-  //TextOut(8, 8, NumToStr(currentColor));
   Wait(250);
+  // Move back to intersection, and turn to go back to start position.
   moveUntilColor(25, YEL);
   adjustR45();
   
@@ -405,7 +441,7 @@ sub change_direction(int orig, int new){
       right90();
       break;
     case 2:
-    case -2:
+    case -2: // Also need a -2 case.
       right180();
       break;
   }
@@ -445,11 +481,17 @@ int move_to(int s, int f, int h){
   // makes turns.
   //
   ////////////////////////////////////////////////////////////////////////////
+  // Print the amount in x y that the robot needs to move in the left column,
+  // and the current ammount moved by the robot on the 2nd column.
   TextOut(8, 16, NumToStr(tx));
   TextOut(8, 8, NumToStr(ty));
   TextOut(24, 16, NumToStr(0));
   TextOut(24, 8, NumToStr(0));
+
+  // We always move in x direction first, then y.
   if (tx != 0){
+    // If amount to move is not zero, we check the value of tx to see if it is 
+    // negative. Negative -> west movement, positive -> east movemement. 
     if (tx < 0){
       change_direction(heading, WEST);
       heading = WEST;
@@ -457,6 +499,7 @@ int move_to(int s, int f, int h){
       change_direction(heading, EAST);
       heading = EAST;
     }
+    // move abs(tx) intersections forward, after we've oriented to the right heading.
     int i;
     int absTx = abs(tx);
     for (i = 0; i < absTx; i++){
@@ -468,6 +511,8 @@ int move_to(int s, int f, int h){
   }
 
   if (ty != 0){
+    // Identical to above, except in y direction.
+    // Negative -> north movement, positive -> south movement. 
     if (ty < 0){
       change_direction(heading, NORTH);
       heading = NORTH;
@@ -751,13 +796,14 @@ task main(){
   //    - move the robot and the particles forward to the next intersection
   //
   /////////////////////////////////////////////////////////////////////////////
+
   while (robp < THRESHOLD){ /* run the update loop until an acceptable
                              probability is obtained */
-    //check robots surrounding
     move_robot();
+    //check robots surrounding
     rsense = scan_surroundings();
-    nudgeForward();
-    //check each particles surroundings
+    nudgeForward(); // To clear yellow.
+    //check each particles surroundings, and assign the corresponding probability
     for(i = 0; i < 60; i ++){
       psense[0] = sense(map, list[i].x, list[i].y, NORTHEAST, list[i].theta);
       psense[1] = sense(map, list[i].x, list[i].y, SOUTHEAST, list[i].theta);
@@ -772,15 +818,18 @@ task main(){
 
       list[i].prob = list[i].prob * mismatchMults[misses];
     }
+    // Find total probability
     totalprob = 0;
     for (i = 0; i < 60; i++){
       totalprob += list[i].prob;
     }
+    // Normalize all particle probabilities using total probability. 
     for(i = 0; i < 60; i ++){
       list[i].prob = list[i].prob / totalprob;
     }
     robp = 0;
     j = 0; // For keeping track of the most likely particle's index.
+    // Find the most likely particle, and get its probability.
     for(i = 0; i < 60; i++){
       if (robp < list[i].prob){
         robp = list[i].prob;
@@ -792,8 +841,11 @@ task main(){
     guess[1] = list[j].y;
     guess[2] = list[j].theta;
     
-    //TextOut(32, 32, NumToStr(totalprob));
-    //TextOut(32, 24, NumToStr(misses));
+    // Print robot particle color reading, robot color reading, and particle x, y, theta, and prob.
+    // Paricle displayed is the most likely particle. 
+    // first row from left: particle color read top to bottom: NE, SE, SW, NW
+    // second row from left: robot sensor reading from top to bottom: NE, SE, SW, NW
+    // third row from left: particle properties from top to bottom: x, y, theta, prob
     TextOut(8, 32, NumToStr(sense(map, list[j].x, list[j].y, NORTHEAST, list[j].theta)));
     TextOut(8, 24, NumToStr(sense(map, list[j].x, list[j].y, SOUTHEAST, list[j].theta)));
     TextOut(8, 16, NumToStr(sense(map, list[j].x, list[j].y, SOUTHWEST, list[j].theta)));
@@ -806,13 +858,13 @@ task main(){
     TextOut(24, 24, NumToStr(list[j].y));
     TextOut(24, 16, NumToStr(list[j].theta));
     TextOut(24, 8, NumToStr(list[j].prob));
-    Wait(1000);
 
+    // Move robots 
     for (i = 0; i < 60; i++){
       list[i] = move(list[i]);
     }
   }
-  nudgeForward(-20);
+  nudgeForward(-20); // Reverse the nudge we done in the loop. 
   PlayToneEx(Random(1000) + 200, 400, 3, FALSE);
 
   /* When we are fairly confident about the robot's position, we can move on
@@ -828,6 +880,10 @@ task main(){
   guess[2] = move_to(guess[0]*GHEIGHT + guess[1], target, guess[2]);
   PlayToneEx(Random(1000) + 200, 400, 3, FALSE);
   move_to(target, dest,guess[2]);
-  PlayToneEx(Random(1000) + 200, 400, 3, FALSE);
+  // Final fantasy victory theme. Bonus marks for using it?
+  PlayFileEx("FFIV_vic-start.rso", 4, FALSE);
+  Wait(3586);
+  PlayFileEx("FFVI_vic-loop.rso", 4, TRUE);
+  Wait(28688);
 }
 

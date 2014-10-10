@@ -50,11 +50,7 @@
    decide these values for yourself
    */
 #define THRESHOLD 0.8
-#define MATCH 4.0
-#define MISMATCH1 3.0
-#define MISMATCH2 2.0
-#define MISMATCH3 1.0
-#define MISMATCH4 0.1
+// mismatch values are now defined in the start of main method
 
 /* You may want to define macros to keep track of certain turning angles and
    speeds throughout your code. This provides an easy way to change them */
@@ -252,16 +248,16 @@ inline void adjustToBlack(){
   while(getColor(128) != BLK){
     if (adjCount == 5){
       if (adjDir)
-        RotateMotor(OUT_B, -25, 450);
+        RotateMotor(OUT_B, -40, 450);
       else
-        RotateMotor(OUT_C, -25, 450);
+        RotateMotor(OUT_C, -40, 450);
       adjDir = !adjDir;
       adjCount = 0;
     }
     if (adjDir)
-      RotateMotor(OUT_B, 25, 90);
+      RotateMotor(OUT_B, 30, 90);
     else
-      RotateMotor(OUT_C, 25, 90);;
+      RotateMotor(OUT_C, 30, 90);;
     adjCount += 1;
   }
 }
@@ -290,9 +286,10 @@ long t0, t1;
   t0 = 0;
   d0 = false;
 
-  adjustToBlack();
   // Assume we start on black.
   while(true){
+    if (getColor() != BLK)
+      adjustToBlack();
     sTime = CurrentTick();
     int curColor = moveUntilColorChange(30);
     Wait(100);
@@ -313,8 +310,8 @@ long t0, t1;
         d1 = d0; // Previous turn was a good decision. Fix using same turn.
       else
         d1 = !d0; // Previous turn was not a good decision. Fix by turning oposite way.
-      if (d1) {adjustR(40);}
-      else {adjustL(40);}
+      if (d1) {adjustR(35);}
+      else {adjustL(35);}
     }
     // Shift t1, d1 to t0, d0
 
@@ -367,7 +364,7 @@ intersection scan_surroundings(){
   Wait(250);
   moveUntilColor(25, YEL);
   adjustL90();
-  nudgeForward();
+  nudgeForward(25);
   currentColor = moveUntilBuilding(30, YEL, false);
   rsense.NW = currentColor;
   //TextOut(8, 8, NumToStr(currentColor));
@@ -754,6 +751,10 @@ task main(){
   //    - move the robot and the particles forward to the next intersection
   //
   /////////////////////////////////////////////////////////////////////////////
+  PlayFileEx("FFIV_vic-start.rso", 4, FALSE);
+  Wait(3586);
+  PlayFileEx("FFVI_vic-loop.rso", 4, TRUE);
+  Wait(28688);
   while (robp < THRESHOLD){ /* run the update loop until an acceptable
                              probability is obtained */
     //check robots surrounding
@@ -809,7 +810,6 @@ task main(){
     TextOut(24, 24, NumToStr(list[j].y));
     TextOut(24, 16, NumToStr(list[j].theta));
     TextOut(24, 8, NumToStr(list[j].prob));
-    Wait(1000);
 
     for (i = 0; i < 60; i++){
       list[i] = move(list[i]);
@@ -831,6 +831,9 @@ task main(){
   guess[2] = move_to(guess[0]*GHEIGHT + guess[1], target, guess[2]);
   PlayToneEx(Random(1000) + 200, 400, 3, FALSE);
   move_to(target, dest,guess[2]);
-  PlayToneEx(Random(1000) + 200, 400, 3, FALSE);
+  PlayFileEx("FFIV_vic-start.rso", 4, FALSE);
+  Wait(3586);
+  PlayFileEx("FFVI_vic-loop.rso", 4, TRUE);
+  Wait(28688);
 }
 
