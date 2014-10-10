@@ -1,24 +1,106 @@
 1)
-60 probabilities
-4 @ each intersection
-2)
-1/#of particles -> 1/60
-3)
-The sensor does not always give accurate readings. Our solution was to take multiple samples while the robot was moving in order to give readings from a varitey of sources rather than one source which could be affected by noise.This should work because it takes readings from multiple sources in which factors such as lighting change. 
+60 probabilities, 4 at each intersection.
 
-//how did we test this?
+2)
+All particles should have equal probability at the start, so 
+1 / number of particles -> 1/60
+
+3)
+The sensor does not always give accurate readings. Our solution was to take 
+multiple samples while the robot was in motion in order to give readings from 
+a variety of sources rather than one source.This should work because it takes 
+readings from multiple sources in which factors such as lighting change. So if 
+one reading was noisy, the average of all the readings should give us a more 
+accurate color measurement. This was tested by solving a problem we had with 
+our sensor detecting green when over yellow. After using multiple samples the 
+sensor had detected more yellow samples than green samples and we were 
+returned the color yellow instead of green.
 
 4)
-As each particle moves, its intersection is compared to the robot's intersection. Each of the 4 colors is compared to the 4 colors from the robot's location. Depending on the number of colors that match the robot, the particle gets a different probability with more matches having higher probability and less matches having lower probability. i.e. An intersection with 3/4 colors the same will have a greater probability than a particle with 1/4 matches. Since we do not want to completely get rid of of particles that do not have an exact match, we give them a lower probability and still consider them as having a small chance of being the robot's position.  
+As each particle moves, its intersection is compared to the robot's 
+intersection. Each of the 4 colors is compared to the 4 colors from the 
+robot's location. Depending on the number of colors that match the robot, the 
+particle gets a different probability with more matches having higher 
+probability and less matches having lower probability. i.e. An intersection 
+with 3/4 colors the same will have a greater probability than a particle with 
+1/4 matches. Since we do not want to completely get rid of particles that do 
+not have an exact match, we give them a lower probability and still consider 
+them as having a small chance of being the robot's position. This, versus the 
+original black and white approach, is more forgiving on sensor and motor noise.
 
-//probabily values?
-//agreement?
+If the particle matches the robot's intersection, we multiply that particle's 
+probability by one, thus not changing its probability. While mismatch 
+particles decrease in probability, normalizing increases the probability of 
+matched particles. We determined the probability multiplier values by applying 
+a 0 mean 1.5 sigma Gaussian curve on hard coded x values [0, 1, 2, 3, 4] (the 
+number of mismatches). Depending on the number of mismatches, we multiply the 
+particle's current probability by the output of our Gaussian model. 
+
+5) 
+In our probability model we give probabilities according to the number of 
+colors that is correctly matched. Therefore if the robot's motion results in a 
+bad reading and one color is read wrong, we do not greatly decrease the 
+probability of the best guess but only slightly decrease it. This allows us to 
+keep the probability of the best guess relatively high considering it did not 
+have an exact match to the robot's intersection. After another intersection 
+scan our best guess is then able to recover itself and once again increase its 
+probability.
 
 6)
-After the particles move and get re-evaluate their probabilites, particles that continue to have closer intersectoin matches to the robot's intersections continue to get a larger and larger probability until one particle holds the probability aproaching 1. This particle is clearly our best guess to the robot's location and to a great degree we can consider it to be the robot's location. Therefore we have a high threshold to detect the particle that has probability approaching 1. 
+After the particles move and re-evaluate their probabilities, particles that 
+continue to have similar intersection matches to the robot's readings will get 
+a greater and greater probability through multiplication with our Gaussian 
+model. After it reaches a threshold of 0.8 probability, it is considered our 
+best guess to the robot's location - a guess we can be fairly confident in due 
+to the number of intersection samples required in order to reach such a 
+threshold. In our trials, there has to be at least four perfect matches for a 
+particle to hit a threshold of > 0.8. If one of the matches were disrupted by 
+sensor/motor noise, the number of samples to reach the threshold will then 
+increase, forcing the robot to take more sample readings before a sure 
+decision is made.
+
+7)
+The goal of our design was simplicity, taking a known reliable design (namely 
+the two-wheel caster bot), and modifying it as little as possible in order to 
+support our color sensor. The small size and simplicity of the caster bot also 
+gives it a maneuverability advantage, giving us only two wheels to worry about 
+when navigating the map. The placement of the sensor is critical, as it is 
+ideal for it to remain stationary during turns and adjustments. This makes 
+pinpointing the robot's position on an intersection or road a much easier task.
+
+For the above to be satisfied, the sensor is placed in the middle, right 
+between the two wheels. It is positioned sufficiently close to the ground such 
+that readings are as noise-free as possible. Due to the sensor's extra height, 
+the entire chassis holding the NXT controller has to be raised. The chassis 
+was also modified to allow easy installation / removal of the NXT controller, 
+making our lives easier in the long run. Despite having a design that looks 
+identical to the caster bot, a lot of tweaking was done to the chassis so that 
+the above may be possible.
+
+8)
+The accuracy of the color sensor is paramount. Unless the color sensor gives 
+us reasonably reliable readings, the robot will fail to stay on the road, find 
+intersections, and sense buildings. 
+
+That being said, our color sensor has an annoying kink in reading green on 
+yellow. In our trials, this constantly caused us to misread buildings, as the 
+robot may pick up green on the intersection, and read it as a building. 
+Although our particle filter model accounts for this type of noise, it still 
+causes unnecessarily long times spent on re sampling intersections. 
+
 9)
-yes external factors can affect the ability of the robot to find itself. During testing we realized that some colors were read wrong, however they were read correctly after shining a white light under the senor.
+Yes external factors can affect the ability of the robot to find itself. 
+During testing we realized that some colors were read wrong, however they were 
+read correctly after shining a white light under the senor.
+
 10)
 On average our robot needs to scan about 5 intersections before finding itself.
+
 11)
-Intersections that are similar or exactly the same with other intersections make it harder in determining the robots position because multiple particles have large probabilities. Also, starting at angles to the road make it slightly more difficult because it requires the robot to do additoinal work to correct itself on the road.
+Intersections that are similar or exactly the same with other intersections 
+make it harder in determining the robots position because multiple particles 
+have greater probabilities. This results in multiple locations being the best 
+guess. Eventually the probabilities will update with the movement of the robot 
+and higher probabilities will be associated with close particles. This however 
+requires more time as the probabilities will take longer to accumulate to the 
+stated threshold. 
