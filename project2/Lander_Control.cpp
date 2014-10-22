@@ -438,18 +438,39 @@ void Safety_Override(void)
   // what is it?
   if (dmin<DistLimit*fmax(.25,fmin(fabs(Velocity_X())/5.0,1)))
   { // Too close to a surface in the horizontal direction
-    if (Angle()>1&&Angle()<359){
-      if (Angle()>=180) Rotate(360-Angle());
-      else Rotate(-Angle());
-      return;
+    //If all thrusters work
+    if(MT_OK == 1 && RT_OK == 1 && LT_OK == 1){
+      //Align to vertical
+      if (Angle()>1&&Angle()<359){
+        if (Angle()>=180) Rotate(360-Angle());
+        else Rotate(-Angle());
+        return;
+      }
+      if (Velocity_X()>0){
+        Right_Thruster(1.0);
+        Left_Thruster(0.0);
+      }
+      else{
+        Left_Thruster(1.0);
+        Right_Thruster(0.0);
+      }
     }
-    if (Velocity_X()>0){
-      Right_Thruster(1.0);
-      Left_Thruster(0.0);
-    }
-    else{
-      Left_Thruster(1.0);
-      Right_Thruster(0.0);
+    //If main thruster fails, but both left and right thrusters still work
+    if(MT_OK == 0 && RT_OK == 1 && LT_OK == 1){
+      if(Velocity_X()>0){
+        //rotate to 29 degrees which allows us to move left while canceling 
+        //gravity's effect
+        Rotate(61-Angle());
+        //y thrust: 0.3458 x thrust: -0.6452
+        Right_Thruster(1.0);
+      }
+      else{
+        //rotate to 299 degrees which allows us to move right while canceling
+        //gravity's effect
+        Rotate(299-Angle());
+        //y thrust: 0.3458 x thrust: 0.6452
+        Left_Thruster(1.0);
+      }
     }
   }
 
