@@ -242,6 +242,10 @@ double Position_Y(void);
 double Angle(void);
 double RangeDist(void);
 
+inline double normalizeAngle(double angle);
+inline void turnToAngle(double angle);
+int angleWithinRange(double angle, double range);
+
 /***************************************************
  LANDER CONTROL CODE BEGINS HERE
 ***************************************************/
@@ -478,6 +482,51 @@ void Safety_Override(void)
       Main_Thruster(1.0);
     }
   }
+}
+
+inline double normalizeAngle(double angle){
+  if (angle > 360)
+    return angle - 360;
+  else if (angle < 0)
+    return angle + 360;
+  return angle;
+}
+
+inline void turnToAngle(double angle){
+  double dAngle = angle - Angle();
+  if (dAngle > 180) dAngle -= 360;
+  else if (dAngle < -180) dAngle += 360;
+  Rotate(dAngle);
+}
+
+/**
+* Return true if angle sensor returns angle within specified range.
+* False otherwise. 
+* Require 0 <= angle < 360
+*         0 <= range < 180
+*/
+int angleWithinRange(double angle, double range){
+  double start1, end1, start2, end2;
+  if (angle - range < 0){
+    start2 = angle - range + 360;
+    end2 = 360;
+    start1 = 0;
+    end1 = angle + range;
+  } else if (angle + range > 360) {
+    start2 = 0;
+    end2 = angle + range - 360;
+    start1 = angle - range;
+    end1 = 360;
+  } else {
+    start1 = angle - range;
+    end1 = angle + range;
+  }
+  double readAngle = Angle();
+  if ((readAngle >= start1 && readAngle <= end1) ||
+      (readAngle >= start2 && readAngle <= end2)) {
+    return 1;
+  }
+  return 0;
 }
 
 
