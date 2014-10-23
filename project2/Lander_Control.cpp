@@ -190,6 +190,9 @@ double PLAT_X;
 double PLAT_Y;
 double SONAR_DIST[36];
 
+double Velocity_Y_prev = 0;
+double delt_vy_prev;
+
 // OpenGL global data - YOU MUST NOT CHANGE THIS!
 int FAIL_MODE;
 int MKmode,kbuf[6];
@@ -204,6 +207,7 @@ double Yhist[HIST];
 double dXhist[HIST];
 double dYhist[HIST];
 double Thist[HIST];
+double angHist[10];
 double *rst, *pst;
 int *fst;
 unsigned char *map, *map_b, *varis; // image data
@@ -242,6 +246,10 @@ double Position_Y(void);
 double Angle(void);
 double RangeDist(void);
 
+inline int sectorOfValue(double x, double y);
+inline double measureSector(int sector);
+inline double minOfSonarSlices(int a, int b);
+void rotationControl();
 inline double normalizeAngle(double angle);
 inline void turnToAngle(double angle);
 int angleWithinRange(double angle, double range);
@@ -373,8 +381,69 @@ void Lander_Control(void){
   else Main_Thruster(0);
 }
 
+// Find the sector the given vector belongs in.
+inline int sectorOfAngle(double theta){
+  if ( (337.5 <= theta && theta < 360) || (0 <= theta && theta < 22.5) )  return 0;
+  else if (22.5 <= theta && theta < 67.5) return 1;
+  else if (67.5 <= theta && theta < 112.5) return 2;
+  else if (112.5 <= theta && theta < 157.5) return 3;
+  else if (157.5 <= theta && theta < 202.5) return 4;
+  else if (202.5 <= theta && theta < 247.5) return 5;
+  else if (247.5 <= theta && theta < 292.5) return 6;
+  else return 7;
+}
+
+// Find the minimum of sonar slices a to b inclusive. 
+inline double minOfSonarSlices(int a, int b){
+  double dmin = 1000000;
+  for (int i = a; i <= b; i++)
+    if (SONAR_DIST[i] > -1 && SONAR_DIST[i] < dmin) dmin = SONAR_DIST[i];
+  return dmin;
+}
+
+// return the closest distance in the specified sector.
+inline double measureSector(int sector){
+  if (sector == 1) return minOfSonarSlices(3, 7);
+  else if (sector == 2) return minOfSonarSlices(7, 11);
+  else if (sector == 3) return minOfSonarSlices(12, 16);
+  else if (sector == 4) return minOfSonarSlices(16, 20);
+  else if (sector == 5) return minOfSonarSlices(20, 24);
+  else if (sector == 6) return minOfSonarSlices(25, 29);
+  else if (sector == 7) return minOfSonarSlices(29, 33);
+  else return fmin(minOfSonarSlices(34, 35), minOfSonarSlices(0, 2));
+}
+
+void rotationControl(){
+  double vx = Velocity_X(), vy = Velocity_Y();
+  double vTheta = normalizeAngle(atan2(vx, vy) * 180 / PI); // Angle of the velocity vector.
+  double vMag = sqrt(vx*vx + vy*vy); // Magnitude of velocity vector
+  // Obtain the sector in which we are traveling in.
+  int vSector = sectorOfAngle(vTheta);
+  double vDistMin = measureSector(vSector);
+  double dDistMin = 1000000;
+  int dDistMinSector;
+  for (int i = 0; i < 7; i++){
+    if (measureSector(i) < dDistMin){
+      dDistMinSector = i;
+      dDistMin = measureSector(i);
+    }
+  }
+  // TODO curently only orienting to right thruster.
+  // Obtain time required to orient right thruster to couteract velocity.
+  double tOrient = fabs(Angle() - 0) / 4300;
+  // Obtain time required to hit object in direction of velocity
+  double tHit = fmax((vDistMin - 50) / vMag, 0.1);
+  // Obtain time required to recover. Simplified using hard coded gravity and thruster acc.
+  // Content inside sqrt is > 0
+  double tRecover = vMag / sqrt(703.677 - (443.5 * cos(normalizeAngle(vTheta-180))) );
+  // Weight value used to give SO or LC rotation priority. Its almost like a PID (wthout the I part yet)
+  double weight = fmin(1, (tOrient + tRecover) / tHit + fmax(75 - dDistMin, 0)/50);
+  printf("W: %f dmin: %f sec: %d\n", weight, dDistMin, dDistMinSector);
+}
+
 void Safety_Override(void)
 {
+  rotationControl();
   /*
     This function is intended to keep the lander from
     crashing. It checks the sonar distance array,
@@ -403,17 +472,25 @@ void Safety_Override(void)
     carry out speed corrections using the thrusters
   **************************************************/
 
-  double DistLimit;
-  double Vmag;
+  double distLimitX, distLimitY;
+  double vy = Velocity_Y();
+  double delt_vy;
+  // double Vmag;
   double dmin;
+  int kd;
+
+  if (vy == Velocity_Y_prev)
+    delt_vy = delt_vy_prev;
+  else{
+    delt_vy = vy - Velocity_Y_prev;
+    delt_vy_prev = delt_vy;
+  }
 
   // Establish distance threshold based on lander
   // speed (we need more time to rectify direction
   // at high speed)
-  Vmag=Velocity_X()*Velocity_X();
-  Vmag+=Velocity_Y()*Velocity_Y();
-
-  DistLimit=fmax(75,Vmag);
+  distLimitX= 50 + Velocity_X() * Velocity_X() * 2;
+  distLimitY= 75 + vy*vy + 100*fmax(delt_vy, 0);
 
   // If we're close to the landing platform, disable
   // safety override (close to the landing platform
@@ -437,10 +514,11 @@ void Safety_Override(void)
     for (int i=22;i<32;i++)
       if (SONAR_DIST[i]>-1&&SONAR_DIST[i]<dmin) dmin=SONAR_DIST[i];
   }
+  double distX = dmin;
   // Determine whether we're too close for comfort. There is a reason
   // to have this distance limit modulated by horizontal speed...
   // what is it?
-  if (dmin<DistLimit*fmax(.25,fmin(fabs(Velocity_X())/5.0,1)))
+  if (distX<distLimitX*fmax(.25,fmin(fabs(Velocity_X())/5.0,1)))
   { // Too close to a surface in the horizontal direction
     if (Angle()>1&&Angle()<359){
       if (Angle()>=180) Rotate(360-Angle());
@@ -469,7 +547,7 @@ void Safety_Override(void)
     for (int i=14; i<22; i++)
       if (SONAR_DIST[i]>-1&&SONAR_DIST[i]<dmin) dmin=SONAR_DIST[i];
   }
-  if (dmin<DistLimit){  // Too close to a surface in the horizontal direction
+  if (dmin<distLimitY){  // Too close to a surface in the horizontal direction
     if (Angle()>1||Angle()>359){
       if (Angle()>=180) Rotate(360-Angle());
       else Rotate(-Angle());
@@ -482,8 +560,15 @@ void Safety_Override(void)
       Main_Thruster(1.0);
     }
   }
+  //printf("lX: %f dX: %f lY: %f dY: %f t: %f\n", distLimitX, distX, distLimitY, dmin, 100*fmax(delt_vy, 0));
+  // if (distX<distLimitX || dmin<distLimitY)
+  //   printf("True\n");
+  // else
+  //   printf("False\n");
+  Velocity_Y_prev = vy;
 }
 
+// WARNING: only normalizes angle for one rotation.
 inline double normalizeAngle(double angle){
   if (angle > 360)
     return angle - 360;
