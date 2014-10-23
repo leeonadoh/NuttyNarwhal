@@ -193,6 +193,11 @@ double SONAR_DIST[36];
 double Velocity_Y_prev = 0;
 double delt_vy_prev;
 
+// Custom global variables
+double clt, cmt, crt, crotateAmount; // Used for rotating and firing thrusters.
+int xBrake = false, yBrake = false;
+int dropLander = false;
+
 // OpenGL global data - YOU MUST NOT CHANGE THIS!
 int FAIL_MODE;
 int MKmode,kbuf[6];
@@ -250,15 +255,19 @@ inline int sectorOfValue(double x, double y);
 inline double measureSector(int sector);
 inline double minOfSonarSlices(int a, int b);
 void rotationControl();
+void thrusterControl(double power, int sector, double curAngle);
 inline double normalizeAngle(double angle);
-inline void turnToAngle(double angle);
+inline double minDeltTheta(double curAngle, double toAngle);
 int angleWithinRange(double angle, double range);
+inline int sectorOfAngle(double theta);
+inline void thrust(double lt, double mt, double rt);
 
 /***************************************************
  LANDER CONTROL CODE BEGINS HERE
 ***************************************************/
 
 void Lander_Control(void){
+  return;
   /*
     This is the main control function for the lander. It attempts
     to bring the ship to the location of the landing platform
@@ -311,15 +320,15 @@ void Lander_Control(void){
 
   double VXlim;
   double VYlim;
+  if (fabs(Position_X()-PLAT_X)>200) VXlim=25;
+  else if (fabs(Position_X()-PLAT_X)>100) VXlim=15;
+  else VXlim=5;
 
   // Set velocity limits depending on distance to platform.
   // If the module is far from the platform allow it to
   // move faster, decrease speed limits as the module
   // approaches landing. You may need to be more conservative
   // with velocity limits when things fail.
-  if (fabs(Position_X()-PLAT_X)>200) VXlim=25;
-  else if (fabs(Position_X()-PLAT_X)>100) VXlim=15;
-  else VXlim=5;
 
   if (PLAT_Y-Position_Y()>200) VYlim=-20;
   else if (PLAT_Y-Position_Y()>100) VYlim=-10;  // These are negative because they
@@ -381,6 +390,53 @@ void Lander_Control(void){
   else Main_Thruster(0);
 }
 
+// WARNING: only normalizes angle for one rotation.
+inline double normalizeAngle(double angle){
+  if (angle > 360)
+    return angle - 360;
+  else if (angle < 0)
+    return angle + 360;
+  return angle;
+}
+
+// Return the closest way to rotate from curAngle to toAngle.
+inline double minDeltTheta(double curAngle, double toAngle){
+  double dAngle = toAngle - curAngle;
+  if (dAngle > 180) dAngle -= 360;
+  else if (dAngle < -180) dAngle += 360;
+  return dAngle;
+}
+
+/**
+* Return true if angle sensor returns angle within specified range.
+* False otherwise. 
+* Require 0 <= angle < 360
+*         0 <= range < 180
+*/
+int angleWithinRange(double angle, double range){
+  double start1, end1, start2, end2;
+  if (angle - range < 0){
+    start2 = angle - range + 360;
+    end2 = 360;
+    start1 = 0;
+    end1 = angle + range;
+  } else if (angle + range > 360) {
+    start2 = 0;
+    end2 = angle + range - 360;
+    start1 = angle - range;
+    end1 = 360;
+  } else {
+    start1 = angle - range;
+    end1 = angle + range;
+  }
+  double readAngle = Angle();
+  if ((readAngle >= start1 && readAngle <= end1) ||
+      (readAngle >= start2 && readAngle <= end2)) {
+    return 1;
+  }
+  return 0;
+}
+
 // Find the sector the given vector belongs in.
 inline int sectorOfAngle(double theta){
   if ( (337.5 <= theta && theta < 360) || (0 <= theta && theta < 22.5) )  return 0;
@@ -414,36 +470,207 @@ inline double measureSector(int sector){
 }
 
 void rotationControl(){
+  if (dropLander){
+    if (Angle()>1&&Angle()<359){
+      if (Angle()>=180) 
+        Rotate(360-Angle());
+      else 
+        Rotate(-Angle());
+    }
+    return;
+  } 
   double vx = Velocity_X(), vy = Velocity_Y();
-  double vTheta = normalizeAngle(atan2(vx, vy) * 180 / PI); // Angle of the velocity vector.
-  double vMag = sqrt(vx*vx + vy*vy); // Magnitude of velocity vector
-  // Obtain the sector in which we are traveling in.
+  // Angle of the velocity vector.
+  double vTheta = normalizeAngle(atan2(vx, vy) * 180 / PI);
+  // Magnitude of velocity vector
+  double vMag = sqrt(vx*vx + vy*vy); 
+  // Obtain the sector in which we are traveling in the direction of.
   int vSector = sectorOfAngle(vTheta);
-  double vDistMin = measureSector(vSector);
+  // Measure the distance to the closest object within that sector.
+  double vDistMin = fmin(measureSector(vSector), 300);
+
+  // Obtain the sector containing the closest distance.
   double dDistMin = 1000000;
-  int dDistMinSector;
+  int dDistMinSector = 0;
   for (int i = 0; i < 7; i++){
     if (measureSector(i) < dDistMin){
       dDistMinSector = i;
       dDistMin = measureSector(i);
     }
   }
-  // TODO curently only orienting to right thruster.
-  // Obtain time required to orient right thruster to couteract velocity.
-  double tOrient = fabs(Angle() - 0) / 4300;
+  // Obtain time required to orient a thruster to couteract velocity.
+  thrusterControl(1, vSector, Angle()); // Sets global variables for thruster control.
+  double tOrient = fabs(crotateAmount) / 180; // TODO: need unit of time?
   // Obtain time required to hit object in direction of velocity
+  // 50 is used to add extra padding to compensate for size of lander, and for extra safety.
   double tHit = fmax((vDistMin - 50) / vMag, 0.1);
   // Obtain time required to recover. Simplified using hard coded gravity and thruster acc.
   // Content inside sqrt is > 0
-  double tRecover = vMag / sqrt(703.677 - (443.5 * cos(normalizeAngle(vTheta-180))) );
+  double tRecover = vMag / (sqrt(703.677 - (443.5 * cos(normalizeAngle(vTheta-180))) ));
+  // How important is correcting velocity vs correcting position?
+  double vWeight = fmin((tOrient + tRecover) / tHit, 1); // (- [0, 1]
+  double dWeight = fmin( fmax((55 - dDistMin)/55, 0), 1); // (- [0, 1]
   // Weight value used to give SO or LC rotation priority. Its almost like a PID (wthout the I part yet)
-  double weight = fmin(1, (tOrient + tRecover) / tHit + fmax(75 - dDistMin, 0)/50);
-  printf("W: %f dmin: %f sec: %d\n", weight, dDistMin, dDistMinSector);
+  double weight = fmin(1, vWeight + dWeight);
+
+  // Figure out SO direction. 
+  // Use weighted in-between of vector opposite of theta, and vector
+  // opposite of the direction of closest object.
+  double soDirTheta = (vWeight*vTheta + dWeight*dDistMinSector*45) / (vWeight + dWeight);
+
+  // Figure out LC direction.
+  double lcDirTheta;
+  double platDx = Position_X() - PLAT_X, platDy = Position_Y() - PLAT_Y;
+  if (-50.0 <= platDx && platDx <= 50.0){
+    // Decend.
+    lcDirTheta = normalizeAngle(atan2(platDx, -platDy) * 180 / PI);
+  } else {
+    // If we are not 10 units away horizontally from platform, move so we are there.
+    if (platDx < 0) lcDirTheta = 270;
+    else lcDirTheta = 90;
+  }
+  double VMaglim;
+  if (platDx*platDx + platDy*platDy > 160000) VMaglim=20;
+  else if (platDx*platDx + platDy*platDy > 10000) VMaglim=10;
+  else if (platDx*platDx + platDy*platDy > 250) VMaglim=5;
+  else VMaglim = 2.5;
+
+
+  if (!yBrake && vy > 4) yBrake = true;
+  else if (yBrake && vy < 2) yBrake = false;  
+  if (!xBrake && vMag > VMaglim) xBrake = true;
+  else if (xBrake && vMag < VMaglim - VMaglim/5) xBrake = false;
+
+  if (yBrake){
+    if (lcDirTheta < 90) lcDirTheta = 90;
+    else if (lcDirTheta > 270) lcDirTheta = 270;
+  } 
+  if (xBrake) lcDirTheta = vTheta;
+
+  // Kill safety when we are close enough.
+  if (fabs(platDx) < 10 && fabs(platDy) < 60)
+    weight = 0;
+
+  // Compute final thrust direction. 
+  double finalDir = weight*soDirTheta + (1-weight)*lcDirTheta;
+  int finalSector = sectorOfAngle(finalDir);
+
+  // If y brake is engaged, and we want push in sectors 4, 5, and 3, reduce power to half. 
+  if (yBrake && (finalSector == 4 || finalSector == 5 || finalSector == 3)) thrusterControl(0.5, finalSector, Angle());
+  else thrusterControl(1, finalSector, Angle());
+  // double finalDir;
+  // if (weight <= 0.5)
+  //   finalDir = lcDirTheta;
+  // else 
+  //   finalDir = soDirTheta;
+  if (crotateAmount > 10.0){
+    thrust(0, 0, 0);
+    Rotate(crotateAmount);
+  } else {
+    Rotate(crotateAmount);
+    thrust(clt, cmt, crt);
+  }
+
+  // If lander is this close to landing, we rotate and drop.
+  if (fabs(platDx) < 1 && fabs(platDy) < 34){
+    thrust(0, 0, 0);
+    if (Angle()>1&&Angle()<359){
+      if (Angle()>=180) 
+        Rotate(360-Angle());
+      else 
+        Rotate(-Angle());
+    }
+    dropLander = true;
+  }
+
+  printf("W: %f x: %f y: %f thrustSec %d brakes %d %d\n", weight, platDx, platDy, finalSector, yBrake, xBrake);
+}
+
+inline void thrust(double lt, double mt, double rt){
+  Right_Thruster(rt);
+  Left_Thruster(lt);
+  Main_Thruster(mt);
+}
+
+void thrusterControl(double power, int sector, double curAngle){
+  if (sector == 7 || sector == 0 || sector == 1){
+    crotateAmount = 0;
+    clt = 0, cmt = 0, crt = 0;
+  }
+  else {
+    double sectorTheta = sector * 45.0;
+    // Determine rotations needed to turn from current rotation to given.
+    double rtTheta = minDeltTheta(normalizeAngle(curAngle + 90), sectorTheta); 
+    double mtrtTheta = minDeltTheta(normalizeAngle(curAngle + 135), sectorTheta);
+    double mtTheta = minDeltTheta(normalizeAngle(curAngle + 180), sectorTheta);
+    double mtltTheta = minDeltTheta(normalizeAngle(curAngle + 225), sectorTheta);
+    double ltTheta = minDeltTheta(normalizeAngle(curAngle + 270), sectorTheta);
+    // printf("rt: %f mt: %f lt: %f\n", rtTheta, mtTheta, ltTheta);
+
+    if (!MT_OK && LT_OK && RT_OK) {
+      if (fabs(rtTheta) < fabs(ltTheta)){
+        crotateAmount = rtTheta;
+        clt = 0, cmt = 0, crt = power;
+      } else {
+        crotateAmount = ltTheta;
+        clt = power, cmt = 0, crt = 0;
+      }
+    } else if (MT_OK && !LT_OK && RT_OK){
+      if (fabs(mtrtTheta) < fabs(rtTheta) && fabs(mtrtTheta) < fabs(mtTheta)) {
+        crotateAmount = mtrtTheta;
+        clt = 0, cmt = power, crt = power;
+      } else if (fabs(rtTheta) < fabs(mtrtTheta) && fabs(rtTheta) < fabs(mtTheta)) {
+        crotateAmount = rtTheta;
+        clt = 0, cmt = 0, crt = power;
+      } else {
+        crotateAmount = mtTheta;
+        clt = 0, cmt = power, crt = 0;
+      }
+    } else if (MT_OK && LT_OK && !RT_OK){
+      if (fabs(mtltTheta) < fabs(ltTheta) && fabs(mtltTheta) < fabs(mtTheta)) {
+        crotateAmount = mtltTheta;
+        clt = power, cmt = power, crt = 0;
+      } else if (fabs(ltTheta) < fabs(mtltTheta) && fabs(ltTheta) < fabs(mtTheta)) {
+        crotateAmount = ltTheta;
+        clt = power, cmt = 0, crt = 0;
+      } else {
+        crotateAmount = mtTheta;
+        clt = 0, cmt = power, crt = 0;
+      }
+    } else if (!MT_OK && LT_OK && !RT_OK){
+      crotateAmount = ltTheta;
+      clt = power, cmt = 0, crt = 0;
+    } else if (!MT_OK && !LT_OK && RT_OK){
+      crotateAmount = rtTheta;
+      clt = 0, cmt = 0, crt = power;
+    } else if (MT_OK && !LT_OK && !RT_OK){
+      crotateAmount = mtTheta;
+      clt = 0; cmt = power, crt = 0;
+    } else {
+      if (curAngle > 1 && curAngle < 359){
+        if (curAngle >= 180) {
+          crotateAmount = 360 - curAngle;
+          clt = 0, cmt = 0, crt = 0;
+        } else {
+          crotateAmount = -curAngle;
+          clt = 0, cmt = 0, crt = 0;
+        }
+        return;
+      }
+      if (sector == 2) clt = 0, cmt = 0, crt = power;
+      else if (sector == 3) clt = 0, cmt = power, crt = power;
+      else if (sector == 4) clt = 0, cmt = power, crt = 0;
+      else if (sector == 5) clt = power, cmt = power, crt = 0;
+      else if (sector == 6) clt = power, cmt = 0, crt = 0;
+      crotateAmount = 0;
+    }
+  }
 }
 
 void Safety_Override(void)
 {
   rotationControl();
+  return;
   /*
     This function is intended to keep the lander from
     crashing. It checks the sonar distance array,
@@ -568,51 +795,6 @@ void Safety_Override(void)
   Velocity_Y_prev = vy;
 }
 
-// WARNING: only normalizes angle for one rotation.
-inline double normalizeAngle(double angle){
-  if (angle > 360)
-    return angle - 360;
-  else if (angle < 0)
-    return angle + 360;
-  return angle;
-}
-
-inline void turnToAngle(double angle){
-  double dAngle = angle - Angle();
-  if (dAngle > 180) dAngle -= 360;
-  else if (dAngle < -180) dAngle += 360;
-  Rotate(dAngle);
-}
-
-/**
-* Return true if angle sensor returns angle within specified range.
-* False otherwise. 
-* Require 0 <= angle < 360
-*         0 <= range < 180
-*/
-int angleWithinRange(double angle, double range){
-  double start1, end1, start2, end2;
-  if (angle - range < 0){
-    start2 = angle - range + 360;
-    end2 = 360;
-    start1 = 0;
-    end1 = angle + range;
-  } else if (angle + range > 360) {
-    start2 = 0;
-    end2 = angle + range - 360;
-    start1 = angle - range;
-    end1 = 360;
-  } else {
-    start1 = angle - range;
-    end1 = angle + range;
-  }
-  double readAngle = Angle();
-  if ((readAngle >= start1 && readAngle <= end1) ||
-      (readAngle >= start2 && readAngle <= end2)) {
-    return 1;
-  }
-  return 0;
-}
 
 
 /**************************************************
