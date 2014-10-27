@@ -198,6 +198,9 @@ double clt, cmt, crt, crotateAmount; // Used for rotating and firing thrusters.
 int xBrake = false, yBrake = false;
 int dropLander = false;
 
+double maxError = 0, averageError = 0, averageAbsError = 0, diffAngle;
+long counter = 0;
+
 // OpenGL global data - YOU MUST NOT CHANGE THIS!
 int FAIL_MODE;
 int MKmode,kbuf[6];
@@ -454,8 +457,6 @@ void rotationControl(){
   // Magnitude of velocity vector
   double vMag = sqrt(vx*vx + vy*vy); 
   // Measure the distance to the closest object within that sector.
-  // double vDistMin = fmin(measureSector(vSector), 300);
-  // double vDistMin = measureSector(sectorOfAngle(vTheta));
 
   // Obtain the sector containing the closest distance.
   double dDistMin = 1000000;
@@ -477,7 +478,7 @@ void rotationControl(){
   double tRecover = vMag / (sqrt(703.677 - (443.5 * cos(normalizeAngle(vTheta-180))) ));
   // How important is correcting velocity vs correcting position?
   double vWeight = fmin((tOrient + tRecover) / tHit, 1); // (- [0, 1]
-  double dWeight = fmin( fmax((70 - dDistMin)/55, 0), 1); // (- [0, 1]
+  double dWeight = fmin( fmax((55 - dDistMin)/55, 0), 1); // (- [0, 1]
   // Weight value used to give SO or LC rotation priority.
   double weight = fmin(1, vWeight + dWeight);
 
@@ -518,10 +519,6 @@ void rotationControl(){
   if (!xBrake && vMag > VMaglim) xBrake = true;
   else if (xBrake && vMag < VMaglim - VMaglim/5) xBrake = false;
 
-  // if (yBrake){
-  //   if (lcDirTheta < 90) lcDirTheta = 90;
-  //   else if (lcDirTheta > 270) lcDirTheta = 270;
-  // } 
   // Set landing control to thrust in the direction of the velocity vector
   // when xBrake is engaged. 
   if (xBrake) lcDirTheta = vTheta;
@@ -542,7 +539,7 @@ void rotationControl(){
 
   // Fire thrusters given rotation amount.
   // Disable thrusters if rotation is more than 10 degrees in either direction.
-  if (fabs(crotateAmount) > 10.0){
+  if (fabs(crotateAmount) > 45.0){
     thrust(0, 0, 0);
     Rotate(crotateAmount);
   } else {
@@ -562,7 +559,15 @@ void rotationControl(){
     dropLander = true;
   }
 
-  printf("W: %f x: %f y: %f thrustSec %d brakes %d %d\n", weight, platDx, platDy, finalSector, yBrake, xBrake);
+  if ( !(*(fst+8))){
+    diffAngle = (*(rst+4))*(180.0/PI) - Angle();
+    if (fabs(diffAngle) > fabs(maxError)) maxError = fabs(diffAngle);
+    averageError += diffAngle;
+    averageAbsError += fabs(diffAngle);
+    counter ++;
+    printf("act %f rec %f eMax %f eAvg %f eAvgAbs %f\n", (*(rst+4))*(180.0/PI), Angle(), maxError, averageError/counter, averageAbsError/counter);
+  }
+  //printf("W: %f x: %f y: %f thrustSec %d brakes %d %d\n", weight, platDx, platDy, finalSector, yBrake, xBrake);
 }
 
 // Apply the specified thrust to left thruster, main thruster, and 

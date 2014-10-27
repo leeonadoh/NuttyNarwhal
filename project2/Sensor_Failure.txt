@@ -1,0 +1,27 @@
+4 - Horizontal velocity sensor
+- derivative of horizonal position
+
+5 - Vertical velocity sensor
+- derivative of vertical position
+
+6 - Horizontal position sensor
+- integral of horizonatal velocity
+
+7 - Vertical position sensor
+- integral of vertical velocity
+
+8 - Angle sensor
+- if possible, take average ~ 60 samples (on 0 mean observation)
+
+9 - Sonar
+-rotate sector 3-6 to keep laser pointed down to be used for safety and
+sector 7-0 to help left and right saftey
+
+---position and velocity sensors fail (both x or both y)---
+- need to figure out when we are above the platform
+- we have last good reading (last known position and velocity)
+- have last known platdx or playdy (know whether we need to go left or right)
+- cannot use velocity limit (may cause crashes left and right)
+
+- last known velocity + integral of acceleration to derive velocity over s seconds
+- since we now have velocity, we can use the case when the position sensor fails
