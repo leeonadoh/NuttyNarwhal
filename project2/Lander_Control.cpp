@@ -164,9 +164,11 @@
 #define DISPLAY_LATENCY 10
 #define HIST 180
 
+// Custom parameters
+#define ANG_SAMPLE_SIZE 256
+
 /*
-  Standard C libraries
-*/
+  Standard C libraries */
 #include<stdio.h>
 #include<stdlib.h>
 #include<math.h>
@@ -174,10 +176,9 @@
 #include<time.h>
 
 /*
-   Headers for OpenGL libraries. If you want to run this
-   on your computer, make sure you have installed OpenGL,
-   GLUT, and GLUI
-*/
+  Headers for OpenGL libraries. If you want to run this
+  on your computer, make sure you have installed OpenGL,
+  GLUT, and GLUI */
 #include <GL/gl.h>
 #include <GL/glu.h>
 #include <GL/glut.h>
@@ -195,8 +196,12 @@ double delt_vy_prev;
 
 // Custom global variables
 double clt, cmt, crt, crotateAmount; // Used for rotating and firing thrusters.
-int xBrake = false, yBrake = false;
-int dropLander = false;
+int xBrake, yBrake, dropLander; // Global vars initialized to 0 (false)
+// Sensor ok? booleans
+int xPosOK = 1, yPosOK = 1, xVelOK = 1, yVelOK = 1, angleOK = 1, sonarOK = 1;
+// Variables for filtering angle nose (note initialized to zero).
+double angleXTotal, angleYTotal, FilteredAngle;
+long iterationCount;
 
 double maxError = 0, averageError = 0, averageAbsError = 0, diffAngle;
 long counter = 0;
@@ -257,12 +262,14 @@ double RangeDist(void);
 inline int sectorOfValue(double x, double y);
 inline double measureSector(int sector);
 inline double minOfSonarSlices(int a, int b);
-void rotationControl();
-void thrusterControl(double power, int sector, double curAngle);
 inline double normalizeAngle(double angle);
 inline double minDeltTheta(double curAngle, double toAngle);
 inline int sectorOfAngle(double theta);
 inline void thrust(double lt, double mt, double rt);
+void rotationControl();
+void thrusterControl(double power, int sector, double curAngle);
+
+void angleRobust();
 
 /***************************************************
  LANDER CONTROL CODE BEGINS HERE
@@ -319,77 +326,16 @@ void Lander_Control(void){
            ACCESS THE SIMULATION STATE. That's cheating,
            I'll give you zero.
   **************************************************/
+}
 
-  double VXlim;
-  double VYlim;
-  if (fabs(Position_X()-PLAT_X)>200) VXlim=25;
-  else if (fabs(Position_X()-PLAT_X)>100) VXlim=15;
-  else VXlim=5;
-
-  // Set velocity limits depending on distance to platform.
-  // If the module is far from the platform allow it to
-  // move faster, decrease speed limits as the module
-  // approaches landing. You may need to be more conservative
-  // with velocity limits when things fail.
-
-  if (PLAT_Y-Position_Y()>200) VYlim=-20;
-  else if (PLAT_Y-Position_Y()>100) VYlim=-10;  // These are negative because they
-  else VYlim=-4;				       // limit descent velocity
-
-  // Ensure we will be OVER the platform when we land
-  if (fabs(PLAT_X-Position_X())/fabs(Velocity_X())>1.25*fabs(PLAT_Y-Position_Y())/fabs(Velocity_Y())) 
-    VYlim=0;
-
-  // IMPORTANT NOTE: The code below assumes all components working
-  // properly. IT MAY OR MAY NOT BE USEFUL TO YOU when components
-  // fail. More likely, you will need a set of case-based code
-  // chunks, each of which works under particular failure conditions.
-
-  // Check for rotation away from zero degrees - Rotate first,
-  // use thrusters only when not rotating to avoid adding
-  // velocity components along the rotation directions
-  // Note that only the latest Rotate() command has any
-  // effect, i.e. the rotation angle does not accumulate
-  // for successive calls.
-
-  if (Angle()>1&&Angle()<359){
-    if (Angle()>=180) 
-      Rotate(360-Angle());
-    else 
-      Rotate(-Angle());
-    return;
+inline double angleRobust(){
+  angleXTotal = 0;
+  angleYTotal = 0;
+  for (int i = 0; i < ANG_SAMPLE_SIZE; i++){
+    angleXTotal += sin(Angle() * PI/180);
+    angleYTotal += cos(Angle() * PI/180);
   }
-
-  // Module is oriented properly, check for horizontal position
-  // and set thrusters appropriately.
-  if (Position_X()>PLAT_X){
-    // Lander is to the LEFT of the landing platform, use Right thrusters to move
-    // lander to the left.
-    Left_Thruster(0);	// Make sure we're not fighting ourselves here!
-    if (Velocity_X()>(-VXlim)) 
-      Right_Thruster((VXlim+fmin(0,Velocity_X()))/VXlim);
-    else{
-      // Exceeded velocity limit, brake
-      Right_Thruster(0);
-      Left_Thruster(fabs(VXlim-Velocity_X()));
-    }
-  }
-  else{
-    // Lander is to the RIGHT of the landing platform, opposite from above
-    Right_Thruster(0);
-    if (Velocity_X()<VXlim) 
-      Left_Thruster((VXlim-fmax(0,Velocity_X()))/VXlim);
-    else{
-      Left_Thruster(0);
-      Right_Thruster(fabs(VXlim-Velocity_X()));
-    }
-  }
-
-  // Vertical adjustments. Basically, keep the module below the limit for
-  // vertical velocity and allow for continuous descent. We trust
-  // Safety_Override() to save us from crashing with the ground.
-  if (Velocity_Y()<VYlim) Main_Thruster(1.0);
-  else Main_Thruster(0);
+  return normalizeAngle(atan2(angleXTotal/ANG_SAMPLE_SIZE, angleYTotal/ANG_SAMPLE_SIZE) * 180/PI);
 }
 
 // WARNING: only normalizes angle for one rotation.
@@ -442,12 +388,13 @@ inline double measureSector(int sector){
 }
 
 void rotationControl(){
+  FilteredAngle = updateFilters();
   if (dropLander){
-    if (Angle()>1&&Angle()<359){
-      if (Angle()>=180) 
-        Rotate(360-Angle());
+    if (FilteredAngle>1&&FilteredAngle<359){
+      if (FilteredAngle>=180) 
+        Rotate(360-FilteredAngle);
       else 
-        Rotate(-Angle());
+        Rotate(-FilteredAngle);
     }
     return;
   } 
@@ -468,7 +415,7 @@ void rotationControl(){
     }
   }
   // Obtain time required to orient a thruster to counteract velocity.
-  thrusterControl(1, sectorOfAngle(vTheta), Angle()); // Sets global variables for thruster control.
+  thrusterControl(1, sectorOfAngle(vTheta), FilteredAngle); // Sets global variables for thruster control.
   double tOrient = fabs(crotateAmount) / 180; // Unit of time is approximated for rotation speed.
   // Obtain time required to hit object in direction of velocity
   // 50 is used to add extra padding to compensate for size of lander, and for extra safety.
@@ -478,7 +425,7 @@ void rotationControl(){
   double tRecover = vMag / (sqrt(703.677 - (443.5 * cos(normalizeAngle(vTheta-180))) ));
   // How important is correcting velocity vs correcting position?
   double vWeight = fmin((tOrient + tRecover) / tHit, 1); // (- [0, 1]
-  double dWeight = fmin( fmax((55 - dDistMin)/55, 0), 1); // (- [0, 1]
+  double dWeight = fmin( fmax((70 - dDistMin)/60, 0), 1); // (- [0, 1]
   // Weight value used to give SO or LC rotation priority.
   double weight = fmin(1, vWeight + dWeight);
 
@@ -501,7 +448,7 @@ void rotationControl(){
   }
   // Calculate the current velocity limit (limits magnitude)
   double VMaglim;
-  if (platDx*platDx + platDy*platDy > 160000) VMaglim=20;
+  if (platDx*platDx + platDy*platDy > 160000) VMaglim=15;
   else if (platDx*platDx + platDy*platDy > 10000) VMaglim=10;
   else if (platDx*platDx + platDy*platDy > 250) VMaglim=5;
   else VMaglim = 2.5;
@@ -524,7 +471,7 @@ void rotationControl(){
   if (xBrake) lcDirTheta = vTheta;
 
   // Kill safety when we are close enough.
-  if (fabs(platDx) < 10 && fabs(platDy) < 60)
+  if (fabs(platDx) < 10 && fabs(platDy) < 75)
     weight = 0;
 
   // Compute final thrust direction. 
@@ -534,39 +481,32 @@ void rotationControl(){
   // Thruster control modifies a few global variables that dictate the rotation to make,
   // and the thrusters to turn on.
   if (yBrake && (finalSector == 4 || finalSector == 5 || finalSector == 3)) 
-    thrusterControl(0.5, finalSector, Angle());
-  else thrusterControl(1, finalSector, Angle());
+    thrusterControl(0.5, finalSector, FilteredAngle);
+  else thrusterControl(1, finalSector, FilteredAngle);
 
   // Fire thrusters given rotation amount.
   // Disable thrusters if rotation is more than 10 degrees in either direction.
-  if (fabs(crotateAmount) > 45.0){
+  if (fabs(crotateAmount) > 45){
     thrust(0, 0, 0);
     Rotate(crotateAmount);
   } else {
-    Rotate(crotateAmount);
     thrust(clt, cmt, crt);
+    Rotate(crotateAmount);
   }
 
   // If lander is this close to landing, we rotate and drop.
   if (fabs(platDx) < 1 && fabs(platDy) < 34){
     thrust(0, 0, 0);
-    if (Angle()>1&&Angle()<359){
-      if (Angle()>=180) 
-        Rotate(360-Angle());
+    if (FilteredAngle>1&&FilteredAngle<359){
+      if (FilteredAngle>=180) 
+        Rotate(360-FilteredAngle);
       else 
-        Rotate(-Angle());
+        Rotate(-FilteredAngle);
     }
     dropLander = true;
   }
 
-  if ( !(*(fst+8))){
-    diffAngle = (*(rst+4))*(180.0/PI) - Angle();
-    if (fabs(diffAngle) > fabs(maxError)) maxError = fabs(diffAngle);
-    averageError += diffAngle;
-    averageAbsError += fabs(diffAngle);
-    counter ++;
-    printf("act %f rec %f eMax %f eAvg %f eAvgAbs %f\n", (*(rst+4))*(180.0/PI), Angle(), maxError, averageError/counter, averageAbsError/counter);
-  }
+  printf("act %f filtered %f\n", (*(rst+4))*(180.0/PI), FilteredAngle);
   //printf("W: %f x: %f y: %f thrustSec %d brakes %d %d\n", weight, platDx, platDy, finalSector, yBrake, xBrake);
 }
 
@@ -644,10 +584,8 @@ void thrusterControl(double power, int sector, double curAngle){
       if (curAngle > 1 && curAngle < 359){
         if (curAngle >= 180) {
           crotateAmount = 360 - curAngle;
-          clt = 0, cmt = 0, crt = 0;
         } else {
           crotateAmount = -curAngle;
-          clt = 0, cmt = 0, crt = 0;
         }
         return;
       }
@@ -693,101 +631,6 @@ void Safety_Override(void)
     not corresponding to the landing platform,
     carry out speed corrections using the thrusters
   **************************************************/
-
-  double distLimitX, distLimitY;
-  double vy = Velocity_Y();
-  double delt_vy;
-  // double Vmag;
-  double dmin;
-  int kd;
-
-  if (vy == Velocity_Y_prev)
-    delt_vy = delt_vy_prev;
-  else{
-    delt_vy = vy - Velocity_Y_prev;
-    delt_vy_prev = delt_vy;
-  }
-
-  // Establish distance threshold based on lander
-  // speed (we need more time to rectify direction
-  // at high speed)
-  distLimitX= 50 + Velocity_X() * Velocity_X() * 2;
-  distLimitY= 75 + vy*vy + 100*fmax(delt_vy, 0);
-
-  // If we're close to the landing platform, disable
-  // safety override (close to the landing platform
-  // the Control_Policy() should be trusted to
-  // safely land the craft)
-  if (fabs(PLAT_X-Position_X())<150&&fabs(PLAT_Y-Position_Y())<150) return;
-
-  // Determine the closest surfaces in the direction
-  // of motion. This is done by checking the sonar
-  // array in the quadrant corresponding to the
-  // ship's motion direction to find the entry
-  // with the smallest registered distance
-
-  // Horizontal direction.
-  dmin=1000000;
-  if (Velocity_X()>0){
-    for (int i=5;i<14;i++)
-      if (SONAR_DIST[i]>-1&&SONAR_DIST[i]<dmin) dmin=SONAR_DIST[i];
-  }
-  else{
-    for (int i=22;i<32;i++)
-      if (SONAR_DIST[i]>-1&&SONAR_DIST[i]<dmin) dmin=SONAR_DIST[i];
-  }
-  double distX = dmin;
-  // Determine whether we're too close for comfort. There is a reason
-  // to have this distance limit modulated by horizontal speed...
-  // what is it?
-  if (distX<distLimitX*fmax(.25,fmin(fabs(Velocity_X())/5.0,1)))
-  { // Too close to a surface in the horizontal direction
-    if (Angle()>1&&Angle()<359){
-      if (Angle()>=180) Rotate(360-Angle());
-      else Rotate(-Angle());
-      return;
-    }
-    if (Velocity_X()>0){
-      Right_Thruster(1.0);
-      Left_Thruster(0.0);
-    }
-    else{
-      Left_Thruster(1.0);
-      Right_Thruster(0.0);
-    }
-  }
-
-  // Vertical direction
-  dmin=1000000;
-  if (Velocity_Y()>5){      // Mind this! there is a reason for it...
-    for (int i=0; i<5; i++)
-      if (SONAR_DIST[i]>-1&&SONAR_DIST[i]<dmin) dmin=SONAR_DIST[i];
-    for (int i=32; i<36; i++)
-      if (SONAR_DIST[i]>-1&&SONAR_DIST[i]<dmin) dmin=SONAR_DIST[i];
-  }
-  else{
-    for (int i=14; i<22; i++)
-      if (SONAR_DIST[i]>-1&&SONAR_DIST[i]<dmin) dmin=SONAR_DIST[i];
-  }
-  if (dmin<distLimitY){  // Too close to a surface in the horizontal direction
-    if (Angle()>1||Angle()>359){
-      if (Angle()>=180) Rotate(360-Angle());
-      else Rotate(-Angle());
-      return;
-    }
-    if (Velocity_Y()>2.0){
-      Main_Thruster(0.0);
-    }
-    else{
-      Main_Thruster(1.0);
-    }
-  }
-  //printf("lX: %f dX: %f lY: %f dY: %f t: %f\n", distLimitX, distX, distLimitY, dmin, 100*fmax(delt_vy, 0));
-  // if (distX<distLimitX || dmin<distLimitY)
-  //   printf("True\n");
-  // else
-  //   printf("False\n");
-  Velocity_Y_prev = vy;
 }
 
 
