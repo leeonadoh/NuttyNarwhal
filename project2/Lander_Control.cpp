@@ -165,7 +165,9 @@
 #define HIST 180
 
 // Custom parameters
-#define ANG_SAMPLE_SIZE 256
+#define ANG_SAMPLE_SIZE 1024
+#define POS_SAMPLE_SIZE 16384
+#define POS_HIST_SIZE 64
 
 /*
   Standard C libraries */
@@ -201,10 +203,8 @@ int xBrake, yBrake, dropLander; // Global vars initialized to 0 (false)
 int xPosOK = 1, yPosOK = 1, xVelOK = 1, yVelOK = 1, angleOK = 1, sonarOK = 1;
 // Variables for filtering angle nose (note initialized to zero).
 double angleXTotal, angleYTotal, FilteredAngle;
+double posXHist[POS_HIST_SIZE];
 long iterationCount;
-
-double maxError = 0, averageError = 0, averageAbsError = 0, diffAngle;
-long counter = 0;
 
 // OpenGL global data - YOU MUST NOT CHANGE THIS!
 int FAIL_MODE;
@@ -269,7 +269,7 @@ inline void thrust(double lt, double mt, double rt);
 void rotationControl();
 void thrusterControl(double power, int sector, double curAngle);
 
-void angleRobust();
+inline double angleRobust();
 
 /***************************************************
  LANDER CONTROL CODE BEGINS HERE
@@ -338,6 +338,19 @@ inline double angleRobust(){
   return normalizeAngle(atan2(angleXTotal/ANG_SAMPLE_SIZE, angleYTotal/ANG_SAMPLE_SIZE) * 180/PI);
 }
 
+inline double vxRobust(){ 
+  double curXPos=0;
+  double xPosTotal=0;
+  for (int i = 0; i < POS_SAMPLE_SIZE; i++) xPosTotal += Position_X();
+  curXPos = xPosTotal / POS_SAMPLE_SIZE;
+  double deltXPos = (curXPos - posXHist[iterationCount < POS_HIST_SIZE ? 0 : iterationCount % POS_HIST_SIZE]) 
+                     / fmin(iterationCount, POS_HIST_SIZE) * 40;
+  posXHist[iterationCount % POS_HIST_SIZE] = curXPos;
+  iterationCount ++;
+
+  return deltXPos;
+}
+
 // WARNING: only normalizes angle for one rotation.
 // Attempts to bring the specified angle to [0, 360)
 inline double normalizeAngle(double angle){
@@ -388,7 +401,7 @@ inline double measureSector(int sector){
 }
 
 void rotationControl(){
-  FilteredAngle = updateFilters();
+  FilteredAngle = angleRobust();
   if (dropLander){
     if (FilteredAngle>1&&FilteredAngle<359){
       if (FilteredAngle>=180) 
@@ -505,8 +518,8 @@ void rotationControl(){
     }
     dropLander = true;
   }
-
-  printf("act %f filtered %f\n", (*(rst+4))*(180.0/PI), FilteredAngle);
+  printf("actVx %f robVx %f\n", Velocity_X(), vxRobust());
+  // printf("act %f filtered %f\n", (*(rst+4))*(180.0/PI), FilteredAngle);
   //printf("W: %f x: %f y: %f thrustSec %d brakes %d %d\n", weight, platDx, platDy, finalSector, yBrake, xBrake);
 }
 
