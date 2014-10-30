@@ -167,7 +167,8 @@
 // Custom parameters
 #define ANG_SAMPLE_SIZE 1024
 #define POS_SAMPLE_SIZE 16384
-#define POS_HIST_SIZE 64
+#define POS_CHECK_SAMPLE_SIZE 64
+#define POS_HIST_SIZE 32
 
 /*
   Standard C libraries */
@@ -199,12 +200,17 @@ double delt_vy_prev;
 // Custom global variables
 double clt, cmt, crt, crotateAmount; // Used for rotating and firing thrusters.
 int xBrake, yBrake, dropLander; // Global vars initialized to 0 (false)
-// Sensor ok? booleans
+// Sensor ok booleans, and values to store info from previous iteration.
+// They are used to determine whether the sensor has failed.
 int xPosOK = 1, yPosOK = 1, xVelOK = 1, yVelOK = 1, angleOK = 1, sonarOK = 1;
-// Variables for filtering angle nose (note initialized to zero).
-double angleXTotal, angleYTotal, FilteredAngle;
-double posXHist[POS_HIST_SIZE];
+double prevVx, prevVy, prevAng, prevPx, prevPy;
+// Number of main loop iterations since start.
 long iterationCount;
+// Variable for angle sensor failure.
+double angRobust;
+// Variables for deriving velocity from position.
+double posXHist[POS_HIST_SIZE], posYHist[POS_HIST_SIZE];
+double vxRobust, vyRobust;
 
 // OpenGL global data - YOU MUST NOT CHANGE THIS!
 int FAIL_MODE;
@@ -269,7 +275,11 @@ inline void thrust(double lt, double mt, double rt);
 void rotationControl();
 void thrusterControl(double power, int sector, double curAngle);
 
-inline double angleRobust();
+inline void checkSensors();
+inline void updateSensorBackups();
+double Angle_Robust();
+double VX_Robust();
+double VY_Robust();
 
 /***************************************************
  LANDER CONTROL CODE BEGINS HERE
@@ -328,27 +338,98 @@ void Lander_Control(void){
   **************************************************/
 }
 
-inline double angleRobust(){
-  angleXTotal = 0;
-  angleYTotal = 0;
+inline void checkSensors(){
+  // Initialize previous values on first iteration.
+  if (iterationCount == 0){
+    prevVx = Velocity_X();
+    prevVy = Velocity_Y();
+    prevAng = Angle();
+    // prevPx and prevPy already initialized to 0, since global var.
+    for (int i = 0; i < POS_CHECK_SAMPLE_SIZE; i++){
+      prevPx += Position_X();
+      prevPy += Position_Y();
+    }
+    prevPx = prevPx / POS_CHECK_SAMPLE_SIZE;
+    prevPy = prevPy / POS_CHECK_SAMPLE_SIZE;
+    return;
+  }
+.
+  if (xVelOK){
+    double curVx = Velocity_X();
+    if (fabs(curVx - prevVx) > 1.2) xVelOK = false;
+    prevVx = curVx;
+  }
+  if (yVelOK){
+    double curVy = Velocity_Y();
+    if (fabs(curVy - prevVy) > 1.2) yVelOK = false;
+    prevVy = curVy;    
+  }
+  if (angleOK){
+    double curAng = Angle();
+    if (fabs(minDeltTheta(prevAng, curAng)) > 8.5) angleOK = false;
+    prevAng = curAng;
+  }
+  if (xPosOK){
+    double curPx = 0;
+    for (int i = 0; i < POS_CHECK_SAMPLE_SIZE; i++)
+      curPx += Position_X();
+    curPx = curPx / POS_CHECK_SAMPLE_SIZE;
+    if (fabs(curPx - prevPx) > fabs(Velocity_X()/8) + 9) xPosOK = false;
+    prevPx = curPx;
+  }
+  if (yPosOK){
+    double curPy = 0;
+    for (int i = 0; i < POS_CHECK_SAMPLE_SIZE; i++)
+      curPy += Position_Y();
+    curPy = curPy / POS_CHECK_SAMPLE_SIZE;
+    if (fabs(curPy - prevPy) > fabs(Velocity_Y()/8) + 9) yPosOK = false;
+    prevPy = curPy;
+  }
+}
+
+inline void updateSensorBackups(){
+  static double maxAngleDeviation = 0, maxVXDeviation = 0, maxVYDeviation = 0;
+
+  // Update robust angle reading.
+  double angleXTotal = 0, angleYTotal = 0;
   for (int i = 0; i < ANG_SAMPLE_SIZE; i++){
     angleXTotal += sin(Angle() * PI/180);
     angleYTotal += cos(Angle() * PI/180);
   }
-  return normalizeAngle(atan2(angleXTotal/ANG_SAMPLE_SIZE, angleYTotal/ANG_SAMPLE_SIZE) * 180/PI);
-}
+  angRobust = normalizeAngle(atan2(angleXTotal/ANG_SAMPLE_SIZE, angleYTotal/ANG_SAMPLE_SIZE) * 180/PI);
 
-inline double vxRobust(){ 
-  double curXPos=0;
-  double xPosTotal=0;
-  for (int i = 0; i < POS_SAMPLE_SIZE; i++) xPosTotal += Position_X();
-  curXPos = xPosTotal / POS_SAMPLE_SIZE;
-  double deltXPos = (curXPos - posXHist[iterationCount < POS_HIST_SIZE ? 0 : iterationCount % POS_HIST_SIZE]) 
+  // Update robust velocity readings.
+  double curXPos = 0;
+  double curYPos = 0;
+  for (int i = 0; i < POS_SAMPLE_SIZE; i++){
+    curXPos += Position_X();
+    curYPos += Position_Y();
+  }
+  curXPos = curXPos / POS_SAMPLE_SIZE;
+  curYPos = curYPos / POS_SAMPLE_SIZE;
+  vxRobust = (curXPos - posXHist[iterationCount < POS_HIST_SIZE ? 0 : iterationCount % POS_HIST_SIZE]) 
+                     / fmin(iterationCount, POS_HIST_SIZE) * 40;
+  vyRobust = (curYPos - posYHist[iterationCount < POS_HIST_SIZE ? 0 : iterationCount % POS_HIST_SIZE]) 
                      / fmin(iterationCount, POS_HIST_SIZE) * 40;
   posXHist[iterationCount % POS_HIST_SIZE] = curXPos;
-  iterationCount ++;
+  posYHist[iterationCount % POS_HIST_SIZE] = curYPos;
 
-  return deltXPos;
+  iterationCount ++;
+}
+
+double Angle_Robust(){
+  if (angleOK) return Angle();
+  else return angRobust;
+}
+
+double VX_Robust(){ 
+  if (xVelOK) return Velocity_X();
+  else return vxRobust;
+}
+
+double VY_Robust(){ 
+  if (yVelOK) return Velocity_Y();
+  else return -vyRobust;
 }
 
 // WARNING: only normalizes angle for one rotation.
@@ -401,17 +482,19 @@ inline double measureSector(int sector){
 }
 
 void rotationControl(){
-  FilteredAngle = angleRobust();
+  checkSensors();
+  updateSensorBackups();
+  angRobust = Angle_Robust();
   if (dropLander){
-    if (FilteredAngle>1&&FilteredAngle<359){
-      if (FilteredAngle>=180) 
-        Rotate(360-FilteredAngle);
+    if (angRobust>1&&angRobust<359){
+      if (angRobust>=180) 
+        Rotate(360-angRobust);
       else 
-        Rotate(-FilteredAngle);
+        Rotate(-angRobust);
     }
     return;
   } 
-  double vx = Velocity_X(), vy = Velocity_Y();
+  double vx = VX_Robust(), vy = VY_Robust();
   // Angle of the velocity vector.
   double vTheta = normalizeAngle(atan2(vx, vy) * 180 / PI);
   // Magnitude of velocity vector
@@ -428,7 +511,7 @@ void rotationControl(){
     }
   }
   // Obtain time required to orient a thruster to counteract velocity.
-  thrusterControl(1, sectorOfAngle(vTheta), FilteredAngle); // Sets global variables for thruster control.
+  thrusterControl(1, sectorOfAngle(vTheta), angRobust); // Sets global variables for thruster control.
   double tOrient = fabs(crotateAmount) / 180; // Unit of time is approximated for rotation speed.
   // Obtain time required to hit object in direction of velocity
   // 50 is used to add extra padding to compensate for size of lander, and for extra safety.
@@ -494,8 +577,8 @@ void rotationControl(){
   // Thruster control modifies a few global variables that dictate the rotation to make,
   // and the thrusters to turn on.
   if (yBrake && (finalSector == 4 || finalSector == 5 || finalSector == 3)) 
-    thrusterControl(0.5, finalSector, FilteredAngle);
-  else thrusterControl(1, finalSector, FilteredAngle);
+    thrusterControl(0.5, finalSector, angRobust);
+  else thrusterControl(1, finalSector, angRobust);
 
   // Fire thrusters given rotation amount.
   // Disable thrusters if rotation is more than 10 degrees in either direction.
@@ -510,16 +593,16 @@ void rotationControl(){
   // If lander is this close to landing, we rotate and drop.
   if (fabs(platDx) < 1 && fabs(platDy) < 34){
     thrust(0, 0, 0);
-    if (FilteredAngle>1&&FilteredAngle<359){
-      if (FilteredAngle>=180) 
-        Rotate(360-FilteredAngle);
+    if (angRobust>1&&angRobust<359){
+      if (angRobust>=180) 
+        Rotate(360-angRobust);
       else 
-        Rotate(-FilteredAngle);
+        Rotate(-angRobust);
     }
     dropLander = true;
   }
-  printf("actVx %f robVx %f\n", Velocity_X(), vxRobust());
-  // printf("act %f filtered %f\n", (*(rst+4))*(180.0/PI), FilteredAngle);
+  printf("vxOK %d vyOK %d pxOK %d pyOK %d anOK %d\n", xVelOK, yVelOK, xPosOK, yPosOK, angleOK);
+  // printf("act %f filtered %f\n", (*(rst+4))*(180.0/PI), angRobust);
   //printf("W: %f x: %f y: %f thrustSec %d brakes %d %d\n", weight, platDx, platDy, finalSector, yBrake, xBrake);
 }
 
