@@ -1,7 +1,7 @@
-4 - Horizontal velocity sensor
+*4 - Horizontal velocity sensor
 - derivative of horizonal position
 
-5 - Vertical velocity sensor
+*5 - Vertical velocity sensor
 - derivative of vertical position
 
 6 - Horizontal position sensor
@@ -10,7 +10,7 @@
 7 - Vertical position sensor
 - integral of vertical velocity
 
-8 - Angle sensor
+*8 - Angle sensor
 - if possible, take average ~ 60 samples (on 0 mean observation)
 
 9 - Sonar

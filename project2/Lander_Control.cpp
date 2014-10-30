@@ -169,6 +169,7 @@
 #define POS_SAMPLE_SIZE 16384
 #define POS_CHECK_SAMPLE_SIZE 64
 #define POS_HIST_SIZE 32
+#define VEL_SAMPLE_SIZE 32
 
 /*
   Standard C libraries */
@@ -211,6 +212,8 @@ double angRobust;
 // Variables for deriving velocity from position.
 double posXHist[POS_HIST_SIZE], posYHist[POS_HIST_SIZE];
 double vxRobust, vyRobust;
+
+double currPosx;
 
 // OpenGL global data - YOU MUST NOT CHANGE THIS!
 int FAIL_MODE;
@@ -280,6 +283,8 @@ inline void updateSensorBackups();
 double Angle_Robust();
 double VX_Robust();
 double VY_Robust();
+
+inline double pxRobust();
 
 /***************************************************
  LANDER CONTROL CODE BEGINS HERE
@@ -432,6 +437,16 @@ double VY_Robust(){
   else return -vyRobust;
 }
 
+inline double pxRobust(){
+  double integralvx = 0;
+  for(int i = 0; i < VEL_SAMPLE_SIZE; i++){
+    double velx = vxRobust();
+    integralvx += velx/40;
+  }
+  currPosx += integralvx;
+  return integralvx;
+}
+
 // WARNING: only normalizes angle for one rotation.
 // Attempts to bring the specified angle to [0, 360)
 inline double normalizeAngle(double angle){
@@ -499,6 +514,10 @@ void rotationControl(){
   double vTheta = normalizeAngle(atan2(vx, vy) * 180 / PI);
   // Magnitude of velocity vector
   double vMag = sqrt(vx*vx + vy*vy); 
+  //last known x position
+  if(xPosOK)
+    currPosx = Position_X();
+  xPosOK = 0;
   // Measure the distance to the closest object within that sector.
 
   // Obtain the sector containing the closest distance.
@@ -601,8 +620,11 @@ void rotationControl(){
     }
     dropLander = true;
   }
-  printf("vxOK %d vyOK %d pxOK %d pyOK %d anOK %d\n", xVelOK, yVelOK, xPosOK, yPosOK, angleOK);
+  // printf("vxOK %d vyOK %d pxOK %d pyOK %d anOK %d\n", xVelOK, yVelOK, xPosOK, yPosOK, angleOK);
   // printf("act %f filtered %f\n", (*(rst+4))*(180.0/PI), angRobust);
+  printf("actual x pos: %f integral x pos: %f\n", Position_X(), pxRobust());
+  //printf("actVx %f robVx %f\n", vx, vxRobust());
+  // printf("act %f filtered %f\n", (*(rst+4))*(180.0/PI), FilteredAngle);
   //printf("W: %f x: %f y: %f thrustSec %d brakes %d %d\n", weight, platDx, platDy, finalSector, yBrake, xBrake);
 }
 
