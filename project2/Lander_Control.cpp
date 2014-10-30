@@ -214,6 +214,8 @@ double posXHist[POS_HIST_SIZE], posYHist[POS_HIST_SIZE];
 double vxRobust, vyRobust;
 // Variables that store acceleration in x and y direction;
 double accelX, accelY;
+// Variables for a robust version of the sonar
+double sonarRobust[36];
 
 double lastGoodPX;
 double lastGoodPY;
@@ -396,6 +398,17 @@ inline void checkSensors(){
     if (fabs(curPy - prevPy) > fabs(Velocity_Y()/8) + 9) yPosOK = false;
     prevPy = curPy;
   }
+  if (sonarOK) {
+    int deads = 0;
+    for (int i = 0; i < 36; i++) {
+      if (SONAR_DIST[i] < 0) {
+        deads++;
+      }
+    }
+    if (deads > 30) {
+      sonarOK = false;
+    }
+  }
 }
 
 inline void updateSensorBackups(){
@@ -441,6 +454,21 @@ inline void updateSensorBackups(){
     curyVel += Velocity_Y();
   curyVel = curyVel / VEL_SAMPLE_SIZE;
   lastGoodPY -= curyVel*S_SCALE*T_STEP;
+
+  // Update robust sonar readings
+  if (sonarOK) {
+    for (int i = 0; i < 36; i++) {
+      sonarRobust[i] = SONAR_DIST[i];
+    }
+  }
+  else {
+    if (iterationCount % 5 == 0) {
+      for (int i = 0; i < 36; i++) {
+        sonarRobust[(((int) angRobust)/10+i+18) % 36] = RangeDist();
+        Rotate(10);
+      }
+    }
+  }
 
   iterationCount ++;
 }
@@ -510,7 +538,7 @@ inline int sectorOfAngle(double theta){
 inline double minOfSonarSlices(int a, int b){
   double dmin = 1000000;
   for (int i = a; i <= b; i++)
-    if (SONAR_DIST[i] > -1 && SONAR_DIST[i] < dmin) dmin = SONAR_DIST[i];
+    if (sonarRobust[i] > -1 && sonarRobust[i] < dmin) dmin = sonarRobust[i];
   return dmin;
 }
 
