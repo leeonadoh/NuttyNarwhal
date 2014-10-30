@@ -165,7 +165,7 @@
 #define HIST 180
 
 // Custom parameters
-#define ANG_SAMPLE_SIZE 1024
+#define ANG_SAMPLE_SIZE 2048
 #define POS_SAMPLE_SIZE 16384
 #define POS_CHECK_SAMPLE_SIZE 64
 #define POS_HIST_SIZE 32
@@ -212,6 +212,8 @@ double angRobust;
 // Variables for deriving velocity from position.
 double posXHist[POS_HIST_SIZE], posYHist[POS_HIST_SIZE];
 double vxRobust, vyRobust;
+// Variables that store acceleration in x and y direction;
+double accelX, accelY;
 
 double lastGoodPX;
 double lastGoodPY;
@@ -282,11 +284,13 @@ void thrusterControl(double power, int sector, double curAngle);
 
 inline void checkSensors();
 inline void updateSensorBackups();
+inline void updateAcceleration();
 double Angle_Robust();
 double VX_Robust();
 double VY_Robust();
 
 inline double pxRobust();
+inline double pyRobust()
 
 /***************************************************
  LANDER CONTROL CODE BEGINS HERE
@@ -360,6 +364,7 @@ inline void checkSensors(){
     prevPy = prevPy / POS_CHECK_SAMPLE_SIZE;
     return;
   }
+
   if (xVelOK){
     double curVx = Velocity_X();
     if (fabs(curVx - prevVx) > 1.2) xVelOK = false;
@@ -440,9 +445,16 @@ inline void updateSensorBackups(){
   iterationCount ++;
 }
 
+// Calculate the acceleration in the X direction. 
+inline void updateAcceleration(double curAngle){
+  double rad = curAngle * PI/180;
+  accelX = -(RT_ACCEL*crt*sin(PI/2 + rad) + MT_ACCEL*cmt*sin(PI + rad) + LT_ACCEL*clt*sin(3*PI/2 + rad));
+  accelY = -(RT_ACCEL*crt*cos(PI/2 + rad) + MT_ACCEL*cmt*cos(PI + rad) + LT_ACCEL*clt*cos(3*PI/2 + rad)) - G_ACCEL;
+}
+
 double Angle_Robust(){
-  if (angleOK) return Angle();
-  else return angRobust;
+  // Return since better than the original angle reading anyways.
+  return angRobust;
 }
 
 double VX_Robust(){ 
@@ -517,13 +529,13 @@ inline double measureSector(int sector){
 void rotationControl(){
   checkSensors();
   updateSensorBackups();
-  angRobust = Angle_Robust();
+  updateAcceleration(Angle_Robust());
   if (dropLander){
-    if (angRobust>1&&angRobust<359){
-      if (angRobust>=180) 
-        Rotate(360-angRobust);
+    if (Angle_Robust()>1&&Angle_Robust()<359){
+      if (Angle_Robust()>=180) 
+        Rotate(360-Angle_Robust());
       else 
-        Rotate(-angRobust);
+        Rotate(-Angle_Robust());
     }
     return;
   } 
@@ -535,7 +547,6 @@ void rotationControl(){
   //last known x position
 
   // Measure the distance to the closest object within that sector.
-
   // Obtain the sector containing the closest distance.
   double dDistMin = 1000000;
   int dDistMinSector = 0;
@@ -546,7 +557,7 @@ void rotationControl(){
     }
   }
   // Obtain time required to orient a thruster to counteract velocity.
-  thrusterControl(1, sectorOfAngle(vTheta), angRobust); // Sets global variables for thruster control.
+  thrusterControl(1, sectorOfAngle(vTheta), Angle_Robust()); // Sets global variables for thruster control.
   double tOrient = fabs(crotateAmount) / 180; // Unit of time is approximated for rotation speed.
   // Obtain time required to hit object in direction of velocity
   // 50 is used to add extra padding to compensate for size of lander, and for extra safety.
@@ -612,27 +623,29 @@ void rotationControl(){
   // Thruster control modifies a few global variables that dictate the rotation to make,
   // and the thrusters to turn on.
   if (yBrake && (finalSector == 4 || finalSector == 5 || finalSector == 3)) 
-    thrusterControl(0.5, finalSector, angRobust);
-  else thrusterControl(1, finalSector, angRobust);
+    thrusterControl(0.5, finalSector, Angle_Robust());
+  else thrusterControl(1, finalSector, Angle_Robust());
 
   // Fire thrusters given rotation amount.
   // Disable thrusters if rotation is more than 10 degrees in either direction.
   if (fabs(crotateAmount) > 45){
-    thrust(0, 0, 0);
-    Rotate(crotateAmount);
-  } else {
-    thrust(clt, cmt, crt);
-    Rotate(crotateAmount);
+    clt = 0;
+    cmt = 0;
+    crt = 0;
   }
+
+  thrust(clt, cmt, crt);
+  Rotate(crotateAmount);
+
 
   // If lander is this close to landing, we rotate and drop.
   if (fabs(platDx) < 1 && fabs(platDy) < 34){
     thrust(0, 0, 0);
-    if (angRobust>1&&angRobust<359){
-      if (angRobust>=180) 
-        Rotate(360-angRobust);
+    if (Angle_Robust()>1&&Angle_Robust()<359){
+      if (Angle_Robust()>=180) 
+        Rotate(360-Angle_Robust());
       else 
-        Rotate(-angRobust);
+        Rotate(-Angle_Robust());
     }
     dropLander = true;
   }
@@ -644,6 +657,8 @@ void rotationControl(){
   // printf("actual y pos: %f integral y pos: %f diff: %f\n", px, ipx, px-ipx);
   //printf("actVx %f robVx %f\n", vx, vxRobust());
   // printf("act %f filtered %f\n", (*(rst+4))*(180.0/PI), FilteredAngle);
+  // printf("vxOK %d vyOK %d pxOK %d pyOK %d anOK %d\n", xVelOK, yVelOK, xPosOK, yPosOK, angleOK);
+  // printf("ax: %f ay %f\n", accelX, accelY);
   //printf("W: %f x: %f y: %f thrustSec %d brakes %d %d\n", weight, platDx, platDy, finalSector, yBrake, xBrake);
 }
 
