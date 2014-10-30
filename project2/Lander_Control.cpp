@@ -169,7 +169,7 @@
 #define POS_SAMPLE_SIZE 16384
 #define POS_CHECK_SAMPLE_SIZE 64
 #define POS_HIST_SIZE 32
-#define VEL_SAMPLE_SIZE 32
+#define VEL_SAMPLE_SIZE 1024
 
 /*
   Standard C libraries */
@@ -213,7 +213,9 @@ double angRobust;
 double posXHist[POS_HIST_SIZE], posYHist[POS_HIST_SIZE];
 double vxRobust, vyRobust;
 
-double currPosx;
+double lastGoodPX;
+double lastGoodPY;
+
 
 // OpenGL global data - YOU MUST NOT CHANGE THIS!
 int FAIL_MODE;
@@ -358,7 +360,6 @@ inline void checkSensors(){
     prevPy = prevPy / POS_CHECK_SAMPLE_SIZE;
     return;
   }
-.
   if (xVelOK){
     double curVx = Velocity_X();
     if (fabs(curVx - prevVx) > 1.2) xVelOK = false;
@@ -419,6 +420,23 @@ inline void updateSensorBackups(){
   posXHist[iterationCount % POS_HIST_SIZE] = curXPos;
   posYHist[iterationCount % POS_HIST_SIZE] = curYPos;
 
+  // Update robust position readings.
+  if(xPosOK)
+    lastGoodPX = Position_X();
+  double curxVel = 0;
+  for(int i = 0; i < VEL_SAMPLE_SIZE; i++)
+    curxVel += Velocity_X();
+  curxVel = curxVel / VEL_SAMPLE_SIZE;
+  lastGoodPX += curxVel*S_SCALE*T_STEP;
+
+  if(yPosOK)
+    lastGoodPY = Position_Y();
+  double curyVel = 0;
+  for(int i = 0; i < VEL_SAMPLE_SIZE; i++)
+    curyVel += Velocity_Y();
+  curyVel = curyVel / VEL_SAMPLE_SIZE;
+  lastGoodPY -= curyVel*S_SCALE*T_STEP;
+
   iterationCount ++;
 }
 
@@ -438,13 +456,13 @@ double VY_Robust(){
 }
 
 inline double pxRobust(){
-  double integralvx = 0;
-  for(int i = 0; i < VEL_SAMPLE_SIZE; i++){
-    double velx = vxRobust();
-    integralvx += velx/40;
-  }
-  currPosx += integralvx;
-  return integralvx;
+  if (xPosOK) return Position_X();
+  else return lastGoodPX;
+}
+
+inline double pyRobust(){
+  if (yPosOK) return Position_Y();
+  else return lastGoodPY;
 }
 
 // WARNING: only normalizes angle for one rotation.
@@ -515,9 +533,7 @@ void rotationControl(){
   // Magnitude of velocity vector
   double vMag = sqrt(vx*vx + vy*vy); 
   //last known x position
-  if(xPosOK)
-    currPosx = Position_X();
-  xPosOK = 0;
+
   // Measure the distance to the closest object within that sector.
 
   // Obtain the sector containing the closest distance.
@@ -552,7 +568,7 @@ void rotationControl(){
   // Figure out LC direction.
   double lcDirTheta;
   // Calculate distance from platform.
-  double platDx = Position_X() - PLAT_X, platDy = Position_Y() - PLAT_Y;
+  double platDx = pxRobust() - PLAT_X, platDy = pyRobust() - PLAT_Y;
   // Only start decent once we are 50 units away from platform.
   if (fabs(platDx) <= 50){
     lcDirTheta = normalizeAngle(atan2(platDx, -platDy) * 180 / PI);
@@ -620,9 +636,12 @@ void rotationControl(){
     }
     dropLander = true;
   }
+  printf("distance to platform: (x%f,y%f)\n", platDx, platDy);
   // printf("vxOK %d vyOK %d pxOK %d pyOK %d anOK %d\n", xVelOK, yVelOK, xPosOK, yPosOK, angleOK);
   // printf("act %f filtered %f\n", (*(rst+4))*(180.0/PI), angRobust);
-  printf("actual x pos: %f integral x pos: %f\n", Position_X(), pxRobust());
+  // double ipx = pyRobust();
+  // double px = Position_Y();
+  // printf("actual y pos: %f integral y pos: %f diff: %f\n", px, ipx, px-ipx);
   //printf("actVx %f robVx %f\n", vx, vxRobust());
   // printf("act %f filtered %f\n", (*(rst+4))*(180.0/PI), FilteredAngle);
   //printf("W: %f x: %f y: %f thrustSec %d brakes %d %d\n", weight, platDx, platDy, finalSector, yBrake, xBrake);
