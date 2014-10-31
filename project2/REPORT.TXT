@@ -56,8 +56,25 @@ Questions:
     
     Through analysis of the noise produced by each functional sensor, we found that they had a mean of zero. This means with a sample size n sufficiently large, sampling a functional sensor n times will produce an average that is reasonably close to the actual value. 
 
+    This of course, may not be accurate enough for some cases. In the case of x' sensor failing, the derivative of x readings is calculated as a replacement. Since delta x values between each iteration is so minute, the smallest amount of noise can cause the derived x' reading to become unusable. The solution then is to sample x over a longer duration of time to produce a larger and better delta x reading. 
+
 
 3) Describe your strategy for dealing with thruster failures
+    
+    We decided eventually to scrap the idea of using both Lander_Control and Safety_Override as separate functions, but to compose them into one. Reason being that for our control model, data from both safety override and lander control is used to calculate a "final thrust sector" - a sector numbered between 0 and 7 that dictates a direction to apply thrust. 
+
+    The final sector is calculated using various input values best described in the tree below:
+
+                             finalSector
+                      (final thrust direction)
+                            /           \
+              SafetyOverride             LanderControl
+                direction                  direction
+                /       \
+         Velocity     Closest Obstacle
+        direction         direction  
+
+    To compose the value of a parent node, a weight is calculated in the range of [0, 1]. A weight of 1 
 
 4) Describe your strategy for dealing with sensor malfunctions:
 
