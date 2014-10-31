@@ -1,54 +1,54 @@
 /*
-	Lander Control simulation.
+  Lander Control simulation.
 
-	Updated by F. Estrada for CSC C85, Oct. 2013
+  Updated by F. Estrada for CSC C85, Oct. 2013
 
-	Learning goals:
+  Learning goals:
 
-	- To explore the implementation of control software
-	  that is robust to malfunctions/failures.
+  - To explore the implementation of control software
+    that is robust to malfunctions/failures.
 
-	The exercise:
+  The exercise:
 
-	- The program loads a terrain map from a .ppm file.
-	  the map shows a red platform which is the location
-	  a landing module should arrive at.
-	- The control software has to navigate the lander
-	  to this location and deposit the lander on the
-	  ground considering:
+  - The program loads a terrain map from a .ppm file.
+    the map shows a red platform which is the location
+    a landing module should arrive at.
+  - The control software has to navigate the lander
+    to this location and deposit the lander on the
+    ground considering:
 
-	  * Maximum vertical speed should be less than 5 m/s at touchdown
-	  * Maximum landing angle should be less than 10 degrees w.r.t vertical
+    * Maximum vertical speed should be less than 5 m/s at touchdown
+    * Maximum landing angle should be less than 10 degrees w.r.t vertical
 
-	- Of course, touching any part of the terrain except
-	  for the landing platform will result in destruction
-	  of the lander
+  - Of course, touching any part of the terrain except
+    for the landing platform will result in destruction
+    of the lander
 
-	This has been made into many videogames. The oldest one
-	I know of being a C64 game called 1985 The Day After.
+  This has been made into many videogames. The oldest one
+  I know of being a C64 game called 1985 The Day After.
         There are older ones! (for bonus credit, find the oldest
         one and send me a description/picture plus info about the
         platform it ran on!)
 
-	Your task:
+  Your task:
 
-	- Ignore all code related to the graphics, you don't
-	  need to look at it for your work, but you
-	  can study it afterwards if you are curious.
+  - Ignore all code related to the graphics, you don't
+    need to look at it for your work, but you
+    can study it afterwards if you are curious.
 
-	- These are the 'sensors' you have available to control
+  - These are the 'sensors' you have available to control
           the lander. You do not have to look at the functions
           that implement them, and you ARE NOT ALLOWED to change
           the way these functions work.
 
-	  Velocity_X();  - Gives you the lander's horizontal velocity
-	  Velocity_Y();	 - Gives you the lander's vertical velocity
-	  Position_X();  - Gives you the lander's horizontal position (0 to 1024)
-	  Position Y();  - Gives you the lander's vertical position (0 to 1024)
+    Velocity_X();  - Gives you the lander's horizontal velocity
+    Velocity_Y();  - Gives you the lander's vertical velocity
+    Position_X();  - Gives you the lander's horizontal position (0 to 1024)
+    Position Y();  - Gives you the lander's vertical position (0 to 1024)
 
-          Angle();	 - Gives the lander's angle w.r.t. vertical in DEGREES (upside-down = 180 degrees)
+          Angle();   - Gives the lander's angle w.r.t. vertical in DEGREES (upside-down = 180 degrees)
 
-	  SONAR_DIST[];  - Array with distances obtained by sonar. Index corresponds
+    SONAR_DIST[];  - Array with distances obtained by sonar. Index corresponds
                            to angle w.r.t. vertical direction measured clockwise, so that
                            SONAR_DIST[0] is distance at 0 degrees (pointing upward)
                            SONAR_DIST[1] is distance at 10 degrees from vertical
@@ -69,39 +69,39 @@
 
           Note: All sensors are NOISY. This makes your life more interesting.
 
-	- Variables accessible to your 'in flight' computer
+  - Variables accessible to your 'in flight' computer
 
-	  MT_OK		- Boolean, if 1 indicates the main thruster is working properly
-	  RT_OK		- Boolean, if 1 indicates the right thruster is working properly
-	  LT_OK		- Boolean, if 1 indicates thr left thruster is working properly
-          PLAT_X	- X position of the landing platform
+    MT_OK   - Boolean, if 1 indicates the main thruster is working properly
+    RT_OK   - Boolean, if 1 indicates the right thruster is working properly
+    LT_OK   - Boolean, if 1 indicates thr left thruster is working properly
+          PLAT_X  - X position of the landing platform
           PLAY_Y        - Y position of the landing platform
 
-	- Control of the lander is via the following functions
+  - Control of the lander is via the following functions
           (which are noisy!)
 
-	  Main_Thruster(double power);   - Sets main thurster power in [0 1], 0 is off
-	  Left_Thruster(double power);	 - Sets left thruster power in [0 1]
-	  Right_Thruster(double power);  - Sets right thruster power in [0 1]
-	  Rotate(double angle);	 	 - Rotates module 'angle' degrees clockwise
-					   (ccw if angle is negative) from current
+    Main_Thruster(double power);   - Sets main thurster power in [0 1], 0 is off
+    Left_Thruster(double power);   - Sets left thruster power in [0 1]
+    Right_Thruster(double power);  - Sets right thruster power in [0 1]
+    Rotate(double angle);    - Rotates module 'angle' degrees clockwise
+             (ccw if angle is negative) from current
                                            orientation (i.e. rotation is not w.r.t.
                                            a fixed reference direction).
 
- 					   Note that rotation takes time!
+             Note that rotation takes time!
 
-	- Important constants
+  - Important constants
 
-	  G_ACCEL = 8.87	- Gravitational acceleration on Venus
-	  MT_ACCEL = 35.0	- Max acceleration provided by the main thurster
-	  RT_ACCEL = 25.0	- Max acceleration provided by right thruster
-	  LT_ACCEL = 25.0	- Max acceleration provided by left thruster
+    G_ACCEL = 8.87  - Gravitational acceleration on Venus
+    MT_ACCEL = 35.0 - Max acceleration provided by the main thurster
+    RT_ACCEL = 25.0 - Max acceleration provided by right thruster
+    LT_ACCEL = 25.0 - Max acceleration provided by left thruster
           MAX_ROT_RATE = .075    - Maximum rate of rotation (in radians) per unit time
 
-	- Functions you need to analyze and possibly change
+  - Functions you need to analyze and possibly change
 
-	  * The Lander_Control(); function, which determines where the lander should
-	    go next and calls control functions
+    * The Lander_Control(); function, which determines where the lander should
+      go next and calls control functions
           * The Safety_Override(); function, which determines whether the lander is
             in danger of crashing, and calls control functions to prevent this.
 
@@ -112,17 +112,17 @@
                          that allows you to test your code against specific
                          component failures.
 
-			 Initial lander position, orientation, and velocity are
+       Initial lander position, orientation, and velocity are
                          randomized.
 
-	  * The code I am providing will land the module assuming nothing goes wrong
+    * The code I am providing will land the module assuming nothing goes wrong
           with the sensors and/or controls, both for the 'easy.ppm' and 'hard.ppm'
           maps.
 
-	  * Failure modes: 0 - Nothing ever fails, life is simple
-			   1 - Controls can fail, sensors are always reliable
-			   2 - Both controls and sensors can fail (and do!)
-			   3 - Selectable failure mode, remaining arguments determine
+    * Failure modes: 0 - Nothing ever fails, life is simple
+         1 - Controls can fail, sensors are always reliable
+         2 - Both controls and sensors can fail (and do!)
+         3 - Selectable failure mode, remaining arguments determine
                                failing component(s):
                                1 - Main thruster
                                2 - Left Thruster
@@ -144,7 +144,7 @@
         * Be sure to complete the attached REPORT.TXT and submit the report as well as
           your code by email. Subject should be 'C85 Safe Landings, name_of_your_team'
 
-	Have fun! try not to crash too many landers, they are expensive!
+  Have fun! try not to crash too many landers, they are expensive!
 
   Credits: Lander image and rocky texture provided by NASA
 */
@@ -165,11 +165,11 @@
 #define HIST 180
 
 // Custom parameters
-#define ANG_SAMPLE_SIZE 2048
+#define ANG_SAMPLE_SIZE 4096
 #define POS_SAMPLE_SIZE 16384
 #define POS_CHECK_SAMPLE_SIZE 64
 #define POS_HIST_SIZE 32
-#define VEL_SAMPLE_SIZE 1024
+#define VEL_SAMPLE_SIZE 16384
 
 /*
   Standard C libraries */
@@ -220,6 +220,7 @@ double sonarRobust[36];
 double lastGoodPX;
 double lastGoodPY;
 
+double fullFailVx, fullFailPx, fullFailVy, fullFailPy;
 
 // OpenGL global data - YOU MUST NOT CHANGE THIS!
 int FAIL_MODE;
@@ -286,13 +287,12 @@ void thrusterControl(double power, int sector, double curAngle);
 
 inline void checkSensors();
 inline void updateSensorBackups();
-inline void updateAcceleration();
 double Angle_Robust();
 double VX_Robust();
 double VY_Robust();
 
-inline double pxRobust();
-inline double pyRobust()
+inline double PX_Robust();
+inline double PY_Robust();
 
 /***************************************************
  LANDER CONTROL CODE BEGINS HERE
@@ -345,7 +345,7 @@ void Lander_Control(void){
            NOTE: Your robust sensor functions can only
            use the available sensor functions and control
            functions!
-   	DO NOT WRITE SENSOR FUNCTIONS THAT DIRECTLY
+    DO NOT WRITE SENSOR FUNCTIONS THAT DIRECTLY
            ACCESS THE SIMULATION STATE. That's cheating,
            I'll give you zero.
   **************************************************/
@@ -367,27 +367,30 @@ inline void checkSensors(){
     return;
   }
 
+  if (angleOK){
+    double curAng = Angle();
+    if (fabs(minDeltTheta(prevAng, curAng)) > 8.5) angleOK = false;
+    prevAng = curAng;
+  }
   if (xVelOK){
     double curVx = Velocity_X();
     if (fabs(curVx - prevVx) > 1.2) xVelOK = false;
+    fullFailVx = prevVx;
     prevVx = curVx;
   }
   if (yVelOK){
     double curVy = Velocity_Y();
     if (fabs(curVy - prevVy) > 1.2) yVelOK = false;
+    fullFailVy = prevVy;
     prevVy = curVy;    
-  }
-  if (angleOK){
-    double curAng = Angle();
-    if (fabs(minDeltTheta(prevAng, curAng)) > 8.5) angleOK = false;
-    prevAng = curAng;
   }
   if (xPosOK){
     double curPx = 0;
     for (int i = 0; i < POS_CHECK_SAMPLE_SIZE; i++)
       curPx += Position_X();
     curPx = curPx / POS_CHECK_SAMPLE_SIZE;
-    if (fabs(curPx - prevPx) > fabs(Velocity_X()/8) + 9) xPosOK = false;
+    if (fabs(curPx - prevPx) > fabs(VX_Robust()/8) + 10) xPosOK = false;
+    fullFailPx = prevPx;
     prevPx = curPx;
   }
   if (yPosOK){
@@ -395,7 +398,8 @@ inline void checkSensors(){
     for (int i = 0; i < POS_CHECK_SAMPLE_SIZE; i++)
       curPy += Position_Y();
     curPy = curPy / POS_CHECK_SAMPLE_SIZE;
-    if (fabs(curPy - prevPy) > fabs(Velocity_Y()/8) + 9) yPosOK = false;
+    if (fabs(curPy - prevPy) > fabs(VY_Robust()/8) + 10) yPosOK = false;
+    fullFailPy = prevPy;
     prevPy = curPy;
   }
   if (sonarOK) {
@@ -405,37 +409,58 @@ inline void checkSensors(){
         deads++;
       }
     }
-    if (deads > 30) {
+    if (deads > 30 && iterationCount > 64) {
       sonarOK = false;
     }
   }
 }
 
+// Update backup readings, regardless of wheter sensors failed or not. 
+// Robust functions will decide whether or not to use the backup readings.
 inline void updateSensorBackups(){
-  static double maxAngleDeviation = 0, maxVXDeviation = 0, maxVYDeviation = 0;
-
   // Update robust angle reading.
   double angleXTotal = 0, angleYTotal = 0;
+  double noisyAngle = 0;
   for (int i = 0; i < ANG_SAMPLE_SIZE; i++){
-    angleXTotal += sin(Angle() * PI/180);
-    angleYTotal += cos(Angle() * PI/180);
+    noisyAngle = Angle();
+    angleXTotal += sin(noisyAngle * PI/180);
+    angleYTotal += cos(noisyAngle * PI/180);
   }
   angRobust = normalizeAngle(atan2(angleXTotal/ANG_SAMPLE_SIZE, angleYTotal/ANG_SAMPLE_SIZE) * 180/PI);
 
+  // Calculate acceleration in their components. 
+  double rad = angRobust * PI/180 - 0.000283; // Angles like to tilt clockwise. 
+  // Add the average of motor noise to compensate for existing motor noise. 
+  double nCrt = RT_OK ? .95*crt + .05*drand48() : 0;
+  double nCmt = MT_OK ? .95*cmt + .05*drand48() : 0;
+  double nClt = LT_OK ? .95*clt + .05*drand48() : 0;
+  // Below is a simplified & expanded version of:
+  // accelX = -(RT_ACCEL*nCrt*sin(PI/2 + rad) + MT_ACCEL*nCmt*sin(PI + rad) + LT_ACCEL*nClt*sin(3*PI/2 + rad));
+  // accelY = -(RT_ACCEL*nCrt*cos(PI/2 + rad) + MT_ACCEL*nCmt*cos(PI + rad) + LT_ACCEL*nClt*cos(3*PI/2 + rad)) - G_ACCEL;
+  // which calculates the acceleration in each direction of the thrusters.
+  accelX = -cos(2*PI-rad)*RT_ACCEL*nCrt + sin(rad)*MT_ACCEL*nCmt - cos(rad-PI)*LT_ACCEL*nClt;
+  accelY = -G_ACCEL - sin(2*PI-rad)*RT_ACCEL*nCrt + cos(rad)*MT_ACCEL*nCmt + sin(rad-PI)*LT_ACCEL*nClt;
+  // Update x and y variables used when both velocity and position sensors of an axis fail.
+  fullFailVx += accelX * T_STEP;
+  fullFailPx += fullFailVx * S_SCALE*T_STEP;
+  fullFailVy += accelY * T_STEP;
+  fullFailPy -= fullFailVy * S_SCALE*T_STEP; // minus, since positive vy -> up
+
   // Update robust velocity readings.
   double curXPos = 0;
-  double curYPos = 0;
-  for (int i = 0; i < POS_SAMPLE_SIZE; i++){
+  for (int i = 0; i < POS_SAMPLE_SIZE; i++)
     curXPos += Position_X();
-    curYPos += Position_Y();
-  }
   curXPos = curXPos / POS_SAMPLE_SIZE;
-  curYPos = curYPos / POS_SAMPLE_SIZE;
   vxRobust = (curXPos - posXHist[iterationCount < POS_HIST_SIZE ? 0 : iterationCount % POS_HIST_SIZE]) 
-                     / fmin(iterationCount, POS_HIST_SIZE) * 40;
-  vyRobust = (curYPos - posYHist[iterationCount < POS_HIST_SIZE ? 0 : iterationCount % POS_HIST_SIZE]) 
-                     / fmin(iterationCount, POS_HIST_SIZE) * 40;
+                     / fmin(iterationCount, POS_HIST_SIZE) / (S_SCALE*T_STEP);
   posXHist[iterationCount % POS_HIST_SIZE] = curXPos;
+  
+  double curYPos = 0;
+  for (int i = 0; i < POS_SAMPLE_SIZE; i++)
+    curYPos += Position_Y();
+  curYPos = curYPos / POS_SAMPLE_SIZE;
+  vyRobust = (curYPos - posYHist[iterationCount < POS_HIST_SIZE ? 0 : iterationCount % POS_HIST_SIZE]) 
+                     / fmin(iterationCount, POS_HIST_SIZE) / (S_SCALE*T_STEP);
   posYHist[iterationCount % POS_HIST_SIZE] = curYPos;
 
   // Update robust position readings.
@@ -443,7 +468,7 @@ inline void updateSensorBackups(){
     lastGoodPX = Position_X();
   double curxVel = 0;
   for(int i = 0; i < VEL_SAMPLE_SIZE; i++)
-    curxVel += Velocity_X();
+    curxVel += VX_Robust();
   curxVel = curxVel / VEL_SAMPLE_SIZE;
   lastGoodPX += curxVel*S_SCALE*T_STEP;
 
@@ -451,7 +476,7 @@ inline void updateSensorBackups(){
     lastGoodPY = Position_Y();
   double curyVel = 0;
   for(int i = 0; i < VEL_SAMPLE_SIZE; i++)
-    curyVel += Velocity_Y();
+    curyVel += VY_Robust();
   curyVel = curyVel / VEL_SAMPLE_SIZE;
   lastGoodPY -= curyVel*S_SCALE*T_STEP;
 
@@ -473,42 +498,45 @@ inline void updateSensorBackups(){
   iterationCount ++;
 }
 
-// Calculate the acceleration in the X direction. 
-inline void updateAcceleration(double curAngle){
-  double rad = curAngle * PI/180;
-  accelX = -(RT_ACCEL*crt*sin(PI/2 + rad) + MT_ACCEL*cmt*sin(PI + rad) + LT_ACCEL*clt*sin(3*PI/2 + rad));
-  accelY = -(RT_ACCEL*crt*cos(PI/2 + rad) + MT_ACCEL*cmt*cos(PI + rad) + LT_ACCEL*clt*cos(3*PI/2 + rad)) - G_ACCEL;
-}
-
 double Angle_Robust(){
-  // Return since better than the original angle reading anyways.
+  // Return this since better than the original angle reading anyways.
   return angRobust;
 }
 
 double VX_Robust(){ 
   if (xVelOK) return Velocity_X();
+  else if (!xPosOK) return fullFailVx;
   else return vxRobust;
 }
 
 double VY_Robust(){ 
   if (yVelOK) return Velocity_Y();
+  else if (!yPosOK) return fullFailVy;
   else return -vyRobust;
 }
 
-inline double pxRobust(){
+inline double PX_Robust(){
   if (xPosOK) return Position_X();
+  else if (!xVelOK) return fullFailPx;
   else return lastGoodPX;
 }
 
-inline double pyRobust(){
+inline double PY_Robust(){
   if (yPosOK) return Position_Y();
-  else return lastGoodPY;
+  else {
+    if ((fabs(PX_Robust() - PLAT_X) < 50) && (Angle_Robust() > 358 || Angle_Robust() < 2)){
+      fullFailPy = PLAT_Y - RangeDist() - 22; // Refresh Y position by any means possible.
+      lastGoodPY = PLAT_Y - RangeDist() - 22;
+    }
+    if (!yVelOK) return fullFailPy;
+    else return lastGoodPY;
+  }
 }
 
 // WARNING: only normalizes angle for one rotation.
 // Attempts to bring the specified angle to [0, 360)
 inline double normalizeAngle(double angle){
-  if (angle > 360) return angle - 360;
+  if (angle >= 360) return angle - 360;
   else if (angle < 0) return angle + 360;
   return angle;
 }
@@ -557,7 +585,7 @@ inline double measureSector(int sector){
 void rotationControl(){
   checkSensors();
   updateSensorBackups();
-  updateAcceleration(Angle_Robust());
+
   if (dropLander){
     if (Angle_Robust()>1&&Angle_Robust()<359){
       if (Angle_Robust()>=180) 
@@ -589,7 +617,7 @@ void rotationControl(){
   double tOrient = fabs(crotateAmount) / 180; // Unit of time is approximated for rotation speed.
   // Obtain time required to hit object in direction of velocity
   // 50 is used to add extra padding to compensate for size of lander, and for extra safety.
-  double tHit = fmax((measureSector(sectorOfAngle(vTheta)) - 50) / vMag, 0.1);
+  double tHit = fmax((measureSector(sectorOfAngle(vTheta)) - 55) / vMag, 0.1);
   // Obtain time required to recover. Simplified using hard coded gravity and thruster acc = 25.
   // Content inside sqrt is > 0
   double tRecover = vMag / (sqrt(703.677 - (443.5 * cos(normalizeAngle(vTheta-180))) ));
@@ -607,7 +635,8 @@ void rotationControl(){
   // Figure out LC direction.
   double lcDirTheta;
   // Calculate distance from platform.
-  double platDx = pxRobust() - PLAT_X, platDy = pyRobust() - PLAT_Y;
+  double platDx = PX_Robust() - PLAT_X, platDy = PY_Robust() - PLAT_Y;
+
   // Only start decent once we are 50 units away from platform.
   if (fabs(platDx) <= 50){
     lcDirTheta = normalizeAngle(atan2(platDx, -platDy) * 180 / PI);
@@ -665,7 +694,6 @@ void rotationControl(){
   thrust(clt, cmt, crt);
   Rotate(crotateAmount);
 
-
   // If lander is this close to landing, we rotate and drop.
   if (fabs(platDx) < 1 && fabs(platDy) < 34){
     thrust(0, 0, 0);
@@ -677,17 +705,19 @@ void rotationControl(){
     }
     dropLander = true;
   }
-  printf("distance to platform: (x%f,y%f)\n", platDx, platDy);
-  // printf("vxOK %d vyOK %d pxOK %d pyOK %d anOK %d\n", xVelOK, yVelOK, xPosOK, yPosOK, angleOK);
+  // printf("distance to platform: (x%f,y%f)\n", platDx, platDy);
+  // printf("vxOK %d vyOK %d pxOK %d pyOK %d anOK %d sonOK %d \n", xVelOK, yVelOK, xPosOK, yPosOK, angleOK, sonarOK);
+  printf("actX %f calX %f\n", *(rst+0), PX_Robust());
   // printf("act %f filtered %f\n", (*(rst+4))*(180.0/PI), angRobust);
-  // double ipx = pyRobust();
+  // double ipx = PY_Robust();
   // double px = Position_Y();
   // printf("actual y pos: %f integral y pos: %f diff: %f\n", px, ipx, px-ipx);
   //printf("actVx %f robVx %f\n", vx, vxRobust());
   // printf("act %f filtered %f\n", (*(rst+4))*(180.0/PI), FilteredAngle);
   // printf("vxOK %d vyOK %d pxOK %d pyOK %d anOK %d\n", xVelOK, yVelOK, xPosOK, yPosOK, angleOK);
-  // printf("ax: %f ay %f\n", accelX, accelY);
-  //printf("W: %f x: %f y: %f thrustSec %d brakes %d %d\n", weight, platDx, platDy, finalSector, yBrake, xBrake);
+  // printf("actVX %f calVX %f actVY %f calVY %f\n", *(rst+2), fullFailVx, *(rst+3), fullFailVy);
+  // printf("accX: %f\n", accelX);
+  // printf("W: %f x: %f y: %f vTh %f minTh %d brakes %d %d\n", weight, vx, vy, vTheta, dDistMinSector, yBrake, xBrake);
 }
 
 // Apply the specified thrust to left thruster, main thruster, and 
@@ -1008,7 +1038,7 @@ double state_update(double *st, double *parm, int *flg, double *s_dir, double *s
  }
  if (*(parm+2)>0&&*(flg+2)==1)
  {
-  hang=-PI+(*(st+4));   		// -PI to PI
+  hang=-PI+(*(st+4));       // -PI to PI
   *(st+6)+=sin(hang)*LT_ACCEL*(*(parm+2));
   *(st+5)-=cos(hang)*LT_ACCEL*(*(parm+2));
  }
@@ -1525,7 +1555,7 @@ unsigned char *readPPMimage(const char *filename)
  }
  sscanf(&line[0],"%d %d\n",&sizx,&sizy);           // Read file size
 
- fgets(&line[0],9,f);  	                // Read the remaining header line
+ fgets(&line[0],9,f);                   // Read the remaining header line
  im=(unsigned char *)calloc(sizx*sizy*3,sizeof(unsigned char));
  if (im==NULL)
  {
@@ -1563,7 +1593,7 @@ void initGlut(char* winName)
 void WindowReshape(int w, int h)
 {
     glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();			// Initialize with identity matrix
+    glLoadIdentity();     // Initialize with identity matrix
     gluOrtho2D(0, 800, 800, 0);
     glViewport(0,0,w,h);
     Win[0] = w;
@@ -1620,7 +1650,7 @@ void WindowDisplay(void)
     Safety_Override();
     LStat=render_frame(st,parm,flg,s_dir,s_dst);
    }
-   else if (LStat==1)		// Lander crashed
+   else if (LStat==1)   // Lander crashed
    {
     if (frameno>=50)
     {
@@ -1658,7 +1688,7 @@ void WindowDisplay(void)
      frameno++;
     }
    }
-   else if (LStat==2)		// Landing occurred
+   else if (LStat==2)   // Landing occurred
    {
     if (frameno>=50)
     {
@@ -1711,7 +1741,7 @@ void WindowDisplay(void)
      frameno++;
     }
    }
-   else			// Lander left the screen
+   else     // Lander left the screen
    {
     fprintf(stderr,"Elvis has left the building!\n");
     free(map);
