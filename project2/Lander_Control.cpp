@@ -165,7 +165,7 @@
 #define HIST 180
 
 // Custom parameters
-#define ANG_SAMPLE_SIZE 2048
+#define ANG_SAMPLE_SIZE 16384
 #define POS_SAMPLE_SIZE 16384
 #define POS_CHECK_SAMPLE_SIZE 64
 #define POS_HIST_SIZE 32
@@ -364,6 +364,7 @@ inline void checkSensors(){
     }
     prevPx = prevPx / POS_CHECK_SAMPLE_SIZE;
     prevPy = prevPy / POS_CHECK_SAMPLE_SIZE;
+
     return;
   }
 
@@ -420,31 +421,36 @@ inline void checkSensors(){
 inline void updateSensorBackups(){
   // Update robust angle reading.
   double angleXTotal = 0, angleYTotal = 0;
-  double noisyAngle = 0;
   for (int i = 0; i < ANG_SAMPLE_SIZE; i++){
-    noisyAngle = Angle();
-    angleXTotal += sin(noisyAngle * PI/180);
-    angleYTotal += cos(noisyAngle * PI/180);
+    angleXTotal += sin(Angle() * PI/180);
+    angleYTotal += cos(Angle() * PI/180);
   }
-  angRobust = normalizeAngle(atan2(angleXTotal/ANG_SAMPLE_SIZE, angleYTotal/ANG_SAMPLE_SIZE) * 180/PI);
+  angRobust = normalizeAngle(atan2(angleXTotal, angleYTotal) * 180/PI);
 
   // Calculate acceleration in their components. 
-  double rad = angRobust * PI/180 - 0.000283; // Angles like to tilt clockwise. 
+  // double rad = angRobust * PI/180 - 0.000283; // Angles like to tilt clockwise. 
+  double rad = angRobust * PI/180;
   // Add the average of motor noise to compensate for existing motor noise. 
-  double nCrt = RT_OK ? .95*crt + .05*drand48() : 0;
-  double nCmt = MT_OK ? .95*cmt + .05*drand48() : 0;
-  double nClt = LT_OK ? .95*clt + .05*drand48() : 0;
+  double nCmt = MT_OK ? .95*cmt + .025 : 0;
+  double nClt = LT_OK ? .95*clt + .025 : 0;
+  double nCrt = RT_OK ? .95*crt + .025 : 0;
   // Below is a simplified & expanded version of:
   // accelX = -(RT_ACCEL*nCrt*sin(PI/2 + rad) + MT_ACCEL*nCmt*sin(PI + rad) + LT_ACCEL*nClt*sin(3*PI/2 + rad));
   // accelY = -(RT_ACCEL*nCrt*cos(PI/2 + rad) + MT_ACCEL*nCmt*cos(PI + rad) + LT_ACCEL*nClt*cos(3*PI/2 + rad)) - G_ACCEL;
   // which calculates the acceleration in each direction of the thrusters.
   accelX = -cos(2.0*PI-rad)*RT_ACCEL*nCrt + sin(rad)*MT_ACCEL*nCmt - cos(rad-PI)*LT_ACCEL*nClt;
-  accelY = -G_ACCEL - sin(2.0*PI-rad)*RT_ACCEL*nCrt + cos(rad)*MT_ACCEL*nCmt + sin(rad-PI)*LT_ACCEL*nClt;
+  accelY = -sin(2.0*PI-rad)*RT_ACCEL*nCrt + cos(rad)*MT_ACCEL*nCmt + sin(rad-PI)*LT_ACCEL*nClt - G_ACCEL;
   // Update x and y variables used when both velocity and position sensors of an axis fail.
   fullFailVx += T_STEP * accelX;
   fullFailPx += S_SCALE*T_STEP * fullFailVx;
   fullFailVy += T_STEP * accelY;
   fullFailPy -= S_SCALE*T_STEP * fullFailVy; // minus, since positive vy -> up
+
+  // printf("actPx %f calPx %f actPy %f calPy %f\n", *(rst+0), fullFailPx, *(rst+1), fullFailPy);
+  // printf("dTh: %f th: %f ar: %f\n", fabs(minDeltTheta(*(rst+4)*180/PI, angRobust)), *(rst+4)*180/PI, angRobust);
+  // printf("actVX %f calVX %f actVY %f calVY %f\n", *(rst+2), fullFailVx, *(rst+3), fullFailVy);
+  // printf("th: %f\n", Angle());
+  // printf("pM %f %f pL %f %f pR %f %f\n", *(pst+1), nCmt, *(pst+2), nClt, *(pst+3), nCrt);
 
   // Update robust velocity readings.
   double curXPos = 0;
@@ -647,7 +653,7 @@ void rotationControl(){
   }
   // Calculate the current velocity limit (limits magnitude)
   double VMaglim;
-  if (platDx*platDx + platDy*platDy > 160000) VMaglim=15;
+  if (platDx*platDx + platDy*platDy > 160000) VMaglim=20;
   else if (platDx*platDx + platDy*platDy > 10000) VMaglim=10;
   else if (platDx*platDx + platDy*platDy > 250) VMaglim=5;
   else VMaglim = 2.5;
@@ -670,7 +676,7 @@ void rotationControl(){
   if (xBrake) lcDirTheta = vTheta;
 
   // Kill safety when we are close enough.
-  if (fabs(platDx) < 10 && fabs(platDy) < 75)
+  if (fabs(platDx) < 15 && fabs(platDy) < 90)
     weight = 0;
 
   // Compute final thrust direction. 
@@ -695,7 +701,7 @@ void rotationControl(){
   Rotate(crotateAmount);
 
   // If lander is this close to landing, we rotate and drop.
-  if (fabs(platDx) < 1 && fabs(platDy) < 34){
+  if (fabs(platDx) < 2 && fabs(platDy) < 34){
     thrust(0, 0, 0);
     if (Angle_Robust()>1&&Angle_Robust()<359){
       if (Angle_Robust()>=180) 
@@ -715,9 +721,9 @@ void rotationControl(){
   //printf("actVx %f robVx %f\n", vx, vxRobust());
   // printf("act %f filtered %f\n", (*(rst+4))*(180.0/PI), FilteredAngle);
   // printf("vxOK %d vyOK %d pxOK %d pyOK %d anOK %d\n", xVelOK, yVelOK, xPosOK, yPosOK, angleOK);
-  // printf("actVX %f calVX %f actVY %f calVY %f\n", *(rst+2), fullFailVx, *(rst+3), fullFailVy);
   // printf("accX: %f\n", accelX);
   // printf("W: %f x: %f y: %f vTh %f minTh %d brakes %d %d\n", weight, vx, vy, vTheta, dDistMinSector, yBrake, xBrake);
+  printf("pX %4.3f pY %4.3f vX %2.4f vY %2.4f ang %3.2f\n", platDx, platDy, vx, vy, Angle_Robust());
 }
 
 // Apply the specified thrust to left thruster, main thruster, and 

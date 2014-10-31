@@ -3,15 +3,15 @@ CSCC85 - Embedded Systems
 Project 2 - Lander Control
 ______________________________________________________________________
 
-Team name:
+Team name: Nutty Narwhals
 
-Name 1 (last, first):
-Student number 1:
+Name 1 (last, first): Li, Leo (Sunpeng)
+Student number 1: 999093421
 
-Name 2 (last, first):
+Name 2 (last, first): Laljeet, Ryan
 Student number 2:
 
-Name 3 (last, first):
+Name 3 (last, first): Law, Dickson
 Student number 3:
 
 (special: Lose marks for not completing the above information)
@@ -23,20 +23,23 @@ you think the task could be completed
 
 a) The program can land the craft safely in mode '1'
   
-   - for the 'easy.ppm' map (yes/no)
-   - for the 'hard.ppm' map (yes/no)
+   - for the 'easy.ppm' map (yes/no) Yes
+   - for the 'hard.ppm' map (yes/no) Yes
 
    If it fails, describe the conditions in which it fails and how
    you think this could be resolved
 
 b) The program can land the craft safely in mode '2'
   
-   - for the 'easy.ppm' map (yes/no)
-   - for the 'hard.ppm' map (yes/no)
+   - for the 'easy.ppm' map (yes/no) Yes
+   - for the 'hard.ppm' map (yes/no) No
 
    If it fails, describe the conditions in which it fails and how
    you think this could be resolved
 
+    All sensor combinations (any two sensor failures) are accounted for, other than sonar. It was left incomplete due to time constraints.
+
+    To solve this, we would have to rotate the lander at a set interval to take distance readings. We wouldn't have to record all 36 slices, but take rough readings in 8 slices, each 45 degrees apart. We could also makes this simpler by leaving top slices out, making this scanning process faster.
 _______________________________________________________________________
 
 Questions:
@@ -45,7 +48,14 @@ Questions:
    determine the state of the craft and ultimately control it 
    properly?
 
+    When all sensors are working normally, noise is not a big issue. The number of times each sensor is called (once per iteration) is large enough that the noise eventually cancels each other out.
+
+    The noise becomes problematic when we need to derive another sensor's reading from a sensor. For example, when deriving position x (x) readings from velocity x (x'), noise in x' will accumulate onto the derived x reading. Since there is no effective way for us to "refresh" x, x will get worse as time goes, eventually causing the lander to be unable to land. 
+
 2) Describe the technique(s) you used to deal with sensor noise
+    
+    Through analysis of the noise produced by each functional sensor, we found that they had a mean of zero. This means with a sample size n sufficiently large, sampling a functional sensor n times will produce an average that is reasonably close to the actual value. 
+
 
 3) Describe your strategy for dealing with thruster failures
 
@@ -56,7 +66,7 @@ Questions:
    - Angle
    - Sonar
 
-   What if you have multiple failures? what could you do if, for
+   What if you have multiple failures? What could you do if, for
    example both position and velocity sensors became inoperative?
 
 5) What was the hardest failure type to deal with (i.e. which is
@@ -88,12 +98,12 @@ ________________________________________________________________
 
 Grading:
 
-- Answers in this REPORT			/10
-- Software to land craft in mode '1'		/40
-- Software to land craft in mode '2'		/45
-- Style and coding structure			/5
+- Answers in this REPORT      /10
+- Software to land craft in mode '1'    /40
+- Software to land craft in mode '2'    /45
+- Style and coding structure      /5
 
-Total for Project #3				/100 (*)
+Total for Project #3        /100 (*)
 
 (*) Mark is conditional on all members of the team being able
     to explain any component of the solution when asked.
