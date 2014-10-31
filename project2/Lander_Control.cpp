@@ -165,7 +165,7 @@
 #define HIST 180
 
 // Custom parameters
-#define ANG_SAMPLE_SIZE 4096
+#define ANG_SAMPLE_SIZE 2048
 #define POS_SAMPLE_SIZE 16384
 #define POS_CHECK_SAMPLE_SIZE 64
 #define POS_HIST_SIZE 32
@@ -438,13 +438,13 @@ inline void updateSensorBackups(){
   // accelX = -(RT_ACCEL*nCrt*sin(PI/2 + rad) + MT_ACCEL*nCmt*sin(PI + rad) + LT_ACCEL*nClt*sin(3*PI/2 + rad));
   // accelY = -(RT_ACCEL*nCrt*cos(PI/2 + rad) + MT_ACCEL*nCmt*cos(PI + rad) + LT_ACCEL*nClt*cos(3*PI/2 + rad)) - G_ACCEL;
   // which calculates the acceleration in each direction of the thrusters.
-  accelX = -cos(2*PI-rad)*RT_ACCEL*nCrt + sin(rad)*MT_ACCEL*nCmt - cos(rad-PI)*LT_ACCEL*nClt;
-  accelY = -G_ACCEL - sin(2*PI-rad)*RT_ACCEL*nCrt + cos(rad)*MT_ACCEL*nCmt + sin(rad-PI)*LT_ACCEL*nClt;
+  accelX = -cos(2.0*PI-rad)*RT_ACCEL*nCrt + sin(rad)*MT_ACCEL*nCmt - cos(rad-PI)*LT_ACCEL*nClt;
+  accelY = -G_ACCEL - sin(2.0*PI-rad)*RT_ACCEL*nCrt + cos(rad)*MT_ACCEL*nCmt + sin(rad-PI)*LT_ACCEL*nClt;
   // Update x and y variables used when both velocity and position sensors of an axis fail.
-  fullFailVx += accelX * T_STEP;
-  fullFailPx += fullFailVx * S_SCALE*T_STEP;
-  fullFailVy += accelY * T_STEP;
-  fullFailPy -= fullFailVy * S_SCALE*T_STEP; // minus, since positive vy -> up
+  fullFailVx += T_STEP * accelX;
+  fullFailPx += S_SCALE*T_STEP * fullFailVx;
+  fullFailVy += T_STEP * accelY;
+  fullFailPy -= S_SCALE*T_STEP * fullFailVy; // minus, since positive vy -> up
 
   // Update robust velocity readings.
   double curXPos = 0;
@@ -743,6 +743,8 @@ void thrusterControl(double power, int sector, double curAngle){
     clt = 0, cmt = 0, crt = 0;
   }
   else {
+    if (power < 0) power = 0;
+    else if (power > 1) power = 1;
     double sectorTheta = sector * 45.0;
     // Determine rotations needed to turn from current rotation to given.
     double rtTheta = minDeltTheta(normalizeAngle(curAngle + 90), sectorTheta); 
@@ -791,20 +793,14 @@ void thrusterControl(double power, int sector, double curAngle){
       crotateAmount = mtTheta;
       clt = 0; cmt = power, crt = 0;
     } else {
-      if (curAngle > 1 && curAngle < 359){
-        if (curAngle >= 180) {
-          crotateAmount = 360 - curAngle;
-        } else {
-          crotateAmount = -curAngle;
-        }
-        return;
-      }
+      if (curAngle >= 180) crotateAmount = 360 - curAngle;
+      else crotateAmount = -curAngle;
+
       if (sector == 2) clt = 0, cmt = 0, crt = power;
       else if (sector == 3) clt = 0, cmt = power, crt = power;
       else if (sector == 4) clt = 0, cmt = power, crt = 0;
       else if (sector == 5) clt = power, cmt = power, crt = 0;
       else if (sector == 6) clt = power, cmt = 0, crt = 0;
-      crotateAmount = 0;
     }
   }
 }
