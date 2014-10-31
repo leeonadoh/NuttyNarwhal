@@ -707,7 +707,7 @@ void rotationControl(){
   }
   // printf("distance to platform: (x%f,y%f)\n", platDx, platDy);
   // printf("vxOK %d vyOK %d pxOK %d pyOK %d anOK %d sonOK %d \n", xVelOK, yVelOK, xPosOK, yPosOK, angleOK, sonarOK);
-  printf("actX %f calX %f\n", *(rst+0), PX_Robust());
+  // printf("actX %f calX %f\n", *(rst+0), PX_Robust());
   // printf("act %f filtered %f\n", (*(rst+4))*(180.0/PI), angRobust);
   // double ipx = PY_Robust();
   // double px = Position_Y();
