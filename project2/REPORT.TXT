@@ -9,10 +9,10 @@ Name 1 (last, first): Li, Leo (Sunpeng)
 Student number 1: 999093421
 
 Name 2 (last, first): Laljeet, Ryan
-Student number 2:
+Student number 2: 999691365
 
 Name 3 (last, first): Law, Dickson
-Student number 3:
+Student number 3: 998305258
 
 (special: Lose marks for not completing the above information)
 _______________________________________________________________________
@@ -190,28 +190,78 @@ Questions:
 5) What was the hardest failure type to deal with (i.e. which is
    the component, either sensor or control that makes the lander
    harder to handle?)?
+   
+   The hardest failure type to deal with was the position sensor because the
+   position sensor allows us to locate our landing platform, thus allowing 
+   us to achieve our goal. Additionally, our solution for a position sensor 
+   failure is to take the integral of our velocity. This results in very
+   noisy readings and can sometimes prevent the lander from preforming 
+   its landing function. Accuracy is much needed in the position readings
+   for a successful landing.
 
 6) Assume a human pilot was in charge of controlling the craft 
    (i.e. the pilot has control of thrusters and rotation).
    How would you change Safety_Override() so that it prevents
    the pilot from accidentally crashing the lander?
    
+   Currently, our implementation to account for safety rotates and
+   applies thrust in the necessary direction to avoid impact. If a
+   human were to have control of the thrusters and rotation, s/he could 
+   possibly manoeuvre the lander to dangerous positions. If the human gets
+   too close to an obstacle, the safety override will automatically make 
+   necessary rotation movements and thrust away from the obstacle. We
+   currently have a weight assigned that determines how much attention
+   we give to safety vs. getting to the platform. We could change our code
+   such that if a collision is detected, we take full control of the lander 
+   to thrust away from the obstacle, and only restore human control once
+   the lander is once again safe.
+   
 7) Do you think it is reasonable to write such a control function?
    (i.e. a routine that takes control from a human for their
-    own safety)
+   own safety)
 
+	I think it is reasonable to write a control function to take control 
+	from a human for their safety, given enough time. Humans are not perfect
+	and accidents do occur now and then. Having a function that can detect 
+	danger before humans detect it will prevent many human fatalities.
+	If we can build a system that can detect danger and give us enough
+	time to respond, we will soon live in a safer world.
+	
 8) Should the pilot be aware that this software is present?
    (yes or no, and tell me why you think so!)
+   
+   No, I don't think the pilot should be aware that this software is present
+   because humans tend to take advantage of things. Knowing that the software
+   can auto correct for their mistakes will only lead them to create more
+   mistakes. The software should only be used in a state of emergency. Doing
+   so will provide us with more reliable pilots and software as a backup. 
 
 9) Would you buy/drive a car that you know has control software
    that will take control from you if it estimates you are
    doing something dangerous?
+   
+   I would not drive a car that I know will take control from me
+   if it thinks I'm doing something dangerous. I would like to trust software
+   more than myself, but software does not always work. Knowing that there is
+   a possibility that the wrong amount of brakes could be applied does not 
+   allow me to fully trust software to take control for me. This could also
+   tie into the previous question of whether the driver should know about 
+   the software. If I never knew about the software and it happened to help
+   me out of a dangerous situation, I may then start trusting the software.
 
 10) Can you as an embedded systems designer think of every 
     possible scenario that could go wrong so as to write 
     control software that ALWAYS works?
 
     Think about that...
+	
+	With the increasing complexity of systems and the growing number of failure
+	combinations, I would say no it is not always possible to write control
+	software that always works. For less complex systems it may be possible
+	to cover every possible combination of failure that should always work. 
+	But bigger systems involving more sensors and components which result 
+	in a larger number of combinations that can fail will almost never be
+	100% perfect.
 ________________________________________________________________
 
 Grading:
