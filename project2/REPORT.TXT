@@ -37,9 +37,14 @@ b) The program can land the craft safely in mode '2'
    If it fails, describe the conditions in which it fails and how
    you think this could be resolved
 
-    All sensor combinations (any two sensor failures) are accounted for, other than sonar. It was left incomplete due to time constraints.
+    All sensor combinations (any two sensor failures) are accounted for, other 
+    than sonar. It was left incomplete due to time constraints.
 
-    To solve this, we would have to rotate the lander at a set interval to take distance readings. We wouldn't have to record all 36 slices, but take rough readings in 8 slices, each 45 degrees apart. We could also makes this simpler by leaving top slices out, making this scanning process faster.
+    To solve this, we would have to rotate the lander at a set interval to 
+    take distance readings. We wouldn't have to record all 36 slices, but take 
+    rough readings in 8 slices, each 45 degrees apart. We could also makes 
+    this simpler by leaving top slices out, making this scanning process faster
+    .
 _______________________________________________________________________
 
 Questions:
@@ -48,22 +53,47 @@ Questions:
    determine the state of the craft and ultimately control it 
    properly?
 
-    When all sensors are working normally, noise is not a big issue. The number of times each sensor is called (once per iteration) is large enough that the noise eventually cancels each other out.
+    When all sensors are working normally, noise is not a big issue. The 
+    number of times each sensor is called (once per iteration) is large enough 
+    that the noise eventually cancels each other out.
 
-    The noise becomes problematic when we need to derive another sensor's reading from a sensor. For example, when deriving position x (x) readings from velocity x (x'), noise in x' will accumulate onto the derived x reading. Since there is no effective way for us to "refresh" x, x will get worse as time goes, eventually causing the lander to be unable to land. 
+    The noise becomes problematic when we need to derive another sensor's 
+    reading from a sensor. For example, when deriving position x (x) readings 
+    from velocity x (x'), noise in x' will accumulate onto the derived x 
+    reading. Since there is no effective way for us to "refresh" x, x will get 
+    worse as time goes, eventually causing the lander to be unable to land. 
 
 2) Describe the technique(s) you used to deal with sensor noise
     
-    Through analysis of the noise produced by each functional sensor, we found that they had a mean of zero. This means with a sample size n sufficiently large, sampling a functional sensor n times will produce an average that is reasonably close to the actual value. 
+    Through analysis of the noise produced by each functional sensor, we found 
+    that they had a mean of zero. This means with a sample size n sufficiently 
+    large, sampling a functional sensor n times will produce an average that 
+    is reasonably close to the actual value. 
 
-    This of course, may not be accurate enough for some cases. In the case of x' sensor failing, the derivative of x readings is calculated as a replacement. Since delta x values between each iteration is so minute, the smallest amount of noise can cause the derived x' reading to become unusable. The solution then is to sample x over a longer duration of time to produce a larger and better delta x reading. 
+    This of course, may not be accurate enough for some cases. In the case of 
+    x' sensor failing, the derivative of x readings is calculated as a 
+    replacement. Since delta x values between each iteration is so minute, the 
+    smallest amount of noise can cause the derived x' reading to become 
+    unusable. The solution then is to sample x over a longer duration of time 
+    to produce a larger and better delta x reading. 
 
 
 3) Describe your strategy for dealing with thruster failures
     
-    We decided eventually to scrap the idea of using both Lander_Control and Safety_Override as separate functions, but to compose them into one. Reason being that for our control model, data from both safety override and lander control is used to calculate a "final thrust sector" - a sector numbered between 0 and 7 that dictates a direction to apply thrust. 
+    We decided to scrap the idea of using both Lander_Control and 
+    Safety_Override as separate functions, but to compose them into one. For 
+    our control model, data from both safety override and lander control is 
+    required to calculate a "final thrust sector" - a sector numbered between 
+    0 and 7 that defines a direction for the lander to apply thrust. The new 
+    function is named rotation_control(), the steps of which are discussed 
+    thoroughly in the code comments. 
 
-    The final sector is calculated using various input values best described in the tree below:
+    Note that the degree calculation for a sector is simply sector index * 45. 
+    All angles within [(sectorIndex*45)-22.5, (sectorIndex*45)+22.5] degrees 
+    are considered to be within that sector. 
+
+    The final sector is calculated using various values best described in the 
+    tree below:
 
                              finalSector
                       (final thrust direction)
@@ -74,7 +104,30 @@ Questions:
          Velocity     Closest Obstacle
         direction         direction  
 
-    To compose the value of a parent node, a weight is calculated in the range of [0, 1]. A weight of 1 
+    To compose the value of a parent node's direction, a calculated weight is 
+    applied to the value specified by the children nodes, then summed. One can 
+    think of each parent node as a weighted average of its child nodes. 
+
+    This implies that the final thrust direction will try to both keep the 
+    lander from crashing, as well as to land it safely on its destination. How 
+    much attention it gives to landing versus safety governed by a weight, 
+    calculated with some physics. Such is explained and discussed within the 
+    comments of the code. 
+
+    Both the Safety_Override (SO) and Lander_ControL (LC) in our combined 
+    method have been heavily modified to increase reliability regardless of 
+    the number of functioning thrusters (one may note the lack of if 
+    statements in rotationControl()). It is only responsible for determining 
+    the direction that will benefit us the most when thrust is applied. 
+    Another function called thrusterControl() deals with thrusters and 
+    orientation.
+
+    Given the current rotation, the direction in which to apply thrust, and 
+    the amount of thrust to apply (power), thrusterControl() will calculate 
+    the shortest rotation required to align a functional thruster to the 
+    desired thrust direction. It also allows "in between" thrusters, like 
+    firing the main and left thrusters to produce thrust at a 45 degrees 
+    direction for example. 
 
 4) Describe your strategy for dealing with sensor malfunctions:
 
@@ -85,6 +138,54 @@ Questions:
 
    What if you have multiple failures? What could you do if, for
    example both position and velocity sensors became inoperative?
+
+    Sonar
+        Due to time constraints, our team was not able to complete handling of 
+        sonar failures. 
+
+    Angle
+        An angle sensor failure simply introduces a greater deviation within 
+        the zero-mean noise. By sampling the angle reading many times, this 
+        can be easily solved. Since solving this failure does not depend on 
+        any other sensor, there is nothing more to be done.
+
+    Velocity
+        Velocity can be calculated as a derivative of position. If the 
+        position sensor is still functional, we simply compute the change in 
+        position over time. Since the change in position over one iteration is 
+        too small, and therefore contains a large percentage of noise, we 
+        sample over a longer period of time instead. i.e. x_2 is current 
+        iteration's position, x_1 is from 32 iterations in the past. 
+
+    Position
+        Position can be calculated as an integral of velocity. When position 
+        is still detected as functional, we keep a copy of the last good 
+        reading as the starting point for our integral calculations. Once 
+        position fails, we multiply the velocity readings by the time taken 
+        per iteration to obtain the change in position. This is then summed 
+        onto the last good position reading. 
+
+        Due to noise in velocity readings, a large sample size is needed in 
+        order to provide a reasonable velocity reading. Readings that are too 
+        noisy eventually causes the integrated position to deviate 
+        significantly from its actual value.
+
+    Velocity and Position
+        When everything fails, we can use the lander's orientation and 
+        thruster information to calculate acceleration in its x and y 
+        components. Since we know the maximum acceleration provided by each 
+        thruster in addition to the power applied, we can use trigonometry to 
+        obtain such values. Once obtained, velocity is an integral of 
+        acceleration, and position is an integral of velocity. 
+
+        Accuracy within the acceleration derivations are key, as minute 
+        amounts of noise can cause velocity to deviate, and position to 
+        deviate significantly. Large sample sizes deals with this quite well.
+
+        Another issue is thruster noise. When a thruster is fired at full 
+        power, it is not operating at the full acceleration specified, but a 
+        bit less. Compensating for thruster noise by modifying our raw power 
+        inputs used for calculating acceleration fixed the problem.
 
 5) What was the hardest failure type to deal with (i.e. which is
    the component, either sensor or control that makes the lander

@@ -199,7 +199,7 @@ double Velocity_Y_prev = 0;
 double delt_vy_prev;
 
 // Custom global variables
-double clt, cmt, crt, crotateAmount; // Used for rotating and firing thrusters.
+double clt, cmt, crt, crotateAmount; // Used for rotating and firing thrusters. Set by thrusterControl
 int xBrake, yBrake, dropLander; // Global vars initialized to 0 (false)
 // Sensor ok booleans, and values to store info from previous iteration.
 // They are used to determine whether the sensor has failed.
@@ -216,10 +216,10 @@ double vxRobust, vyRobust;
 double accelX, accelY;
 // Variables for a robust version of the sonar
 double sonarRobust[36];
-
+// For integrating functional velocity readings to find position
 double lastGoodPX;
 double lastGoodPY;
-
+// Used when both position and velocity sensors of an axis fails.
 double fullFailVx, fullFailPx, fullFailVy, fullFailPy;
 
 // OpenGL global data - YOU MUST NOT CHANGE THIS!
@@ -364,15 +364,18 @@ inline void checkSensors(){
     }
     prevPx = prevPx / POS_CHECK_SAMPLE_SIZE;
     prevPy = prevPy / POS_CHECK_SAMPLE_SIZE;
-
     return;
   }
 
+  // Check if angle sensor is ok. Calculate by finding the delta angle 
+  // between current and previous angles.
   if (angleOK){
     double curAng = Angle();
     if (fabs(minDeltTheta(prevAng, curAng)) > 8.5) angleOK = false;
     prevAng = curAng;
   }
+  // Check if velocity sensors are toasted.
+  // While velocity and position sensors are OK, keep a last good reading.
   if (xVelOK){
     double curVx = Velocity_X();
     if (fabs(curVx - prevVx) > 1.2) xVelOK = false;
@@ -385,6 +388,8 @@ inline void checkSensors(){
     fullFailVy = prevVy;
     prevVy = curVy;    
   }
+  // Check if position sensors are toasted. Use velocity
+  // to scale the bound. 
   if (xPosOK){
     double curPx = 0;
     for (int i = 0; i < POS_CHECK_SAMPLE_SIZE; i++)
@@ -403,6 +408,7 @@ inline void checkSensors(){
     fullFailPy = prevPy;
     prevPy = curPy;
   }
+  // Check if sonar is OK.
   if (sonarOK) {
     int deads = 0;
     for (int i = 0; i < 36; i++) {
@@ -416,10 +422,11 @@ inline void checkSensors(){
   }
 }
 
-// Update backup readings, regardless of wheter sensors failed or not. 
+// Update backup readings, regardless of whether sensors failed or not. 
 // Robust functions will decide whether or not to use the backup readings.
 inline void updateSensorBackups(){
   // Update robust angle reading.
+  // Use their unit vectors to calculate the average.
   double angleXTotal = 0, angleYTotal = 0;
   for (int i = 0; i < ANG_SAMPLE_SIZE; i++){
     angleXTotal += sin(Angle() * PI/180);
@@ -435,6 +442,7 @@ inline void updateSensorBackups(){
   double nClt = LT_OK ? .95*clt + .025 : 0;
   double nCrt = RT_OK ? .95*crt + .025 : 0;
   // Below is a simplified & expanded version of:
+  // Acceleration in each component is simply the sum of the contributions of each thruster to each component.
   // accelX = -(RT_ACCEL*nCrt*sin(PI/2 + rad) + MT_ACCEL*nCmt*sin(PI + rad) + LT_ACCEL*nClt*sin(3*PI/2 + rad));
   // accelY = -(RT_ACCEL*nCrt*cos(PI/2 + rad) + MT_ACCEL*nCmt*cos(PI + rad) + LT_ACCEL*nClt*cos(3*PI/2 + rad)) - G_ACCEL;
   // which calculates the acceleration in each direction of the thrusters.
@@ -453,6 +461,8 @@ inline void updateSensorBackups(){
   // printf("pM %f %f pL %f %f pR %f %f\n", *(pst+1), nCmt, *(pst+2), nClt, *(pst+3), nCrt);
 
   // Update robust velocity readings.
+  // Use a derivative calculation, and a previous X value that is oldest within the history
+  // to minimize noise. 
   double curXPos = 0;
   for (int i = 0; i < POS_SAMPLE_SIZE; i++)
     curXPos += Position_X();
@@ -539,7 +549,7 @@ inline double PY_Robust(){
   }
 }
 
-// WARNING: only normalizes angle for one rotation.
+// WARNING: only normalizes angle between [-360, 720].
 // Attempts to bring the specified angle to [0, 360)
 inline double normalizeAngle(double angle){
   if (angle >= 360) return angle - 360;
@@ -588,10 +598,16 @@ inline double measureSector(int sector){
   else return fmin(minOfSonarSlices(34, 35), minOfSonarSlices(0, 2));
 }
 
+// Maybe rotationControl isn't a great name for this.
+// Derives the most optimal sector to apply thrust in. 
+// Calls checkSensors() and updateSensorBackups() to keep
+// things in check.
 void rotationControl(){
   checkSensors();
   updateSensorBackups();
 
+  // If we are in drop mode, make sure lander is oriented,
+  // and cut off all thrusters.
   if (dropLander){
     if (Angle_Robust()>1&&Angle_Robust()<359){
       if (Angle_Robust()>=180) 
@@ -606,7 +622,6 @@ void rotationControl(){
   double vTheta = normalizeAngle(atan2(vx, vy) * 180 / PI);
   // Magnitude of velocity vector
   double vMag = sqrt(vx*vx + vy*vy); 
-  //last known x position
 
   // Measure the distance to the closest object within that sector.
   // Obtain the sector containing the closest distance.
@@ -619,7 +634,8 @@ void rotationControl(){
     }
   }
   // Obtain time required to orient a thruster to counteract velocity.
-  thrusterControl(1, sectorOfAngle(vTheta), Angle_Robust()); // Sets global variables for thruster control.
+  // Update angle readings using thruster control. 
+  thrusterControl(1, sectorOfAngle(vTheta), Angle_Robust());
   double tOrient = fabs(crotateAmount) / 180; // Unit of time is approximated for rotation speed.
   // Obtain time required to hit object in direction of velocity
   // 50 is used to add extra padding to compensate for size of lander, and for extra safety.
@@ -737,6 +753,10 @@ inline void thrust(double lt, double mt, double rt){
 // Given the direction of required thrust, and the current angle of the
 // lander, find the most optimal rotation to take, and the most optimal
 // thruster(s) to fire. 
+// Note that this method doesn't fire thrusters or rotate the lander. It
+// modifies a few global variables that store how much to rotate, and the 
+// to apply to thrusters. 
+
 // power: the power applied to the fired thrusters.
 // sector: value between [0, 7] that identifies the sector to apply thrust
 //         in. 0 = 0 deg, 1 = 45 deg, 7 = 315 deg.
@@ -752,13 +772,16 @@ void thrusterControl(double power, int sector, double curAngle){
     if (power < 0) power = 0;
     else if (power > 1) power = 1;
     double sectorTheta = sector * 45.0;
-    // Determine rotations needed to turn from current rotation to given.
+    // Determine rotation needed to align each thruster to the specified
+    // sector. 
+    // The smallest of them all will be used, depending on thruster status.
     double rtTheta = minDeltTheta(normalizeAngle(curAngle + 90), sectorTheta); 
     double mtrtTheta = minDeltTheta(normalizeAngle(curAngle + 135), sectorTheta);
     double mtTheta = minDeltTheta(normalizeAngle(curAngle + 180), sectorTheta);
     double mtltTheta = minDeltTheta(normalizeAngle(curAngle + 225), sectorTheta);
     double ltTheta = minDeltTheta(normalizeAngle(curAngle + 270), sectorTheta);
 
+    // The boolean values explain what each if section is doing. 
     if (!MT_OK && LT_OK && RT_OK) {
       if (fabs(rtTheta) < fabs(ltTheta)){
         crotateAmount = rtTheta;
@@ -813,7 +836,7 @@ void thrusterControl(double power, int sector, double curAngle){
 
 void Safety_Override(void)
 {
-  // Fully disable safety override.
+  // Fully disable safety override. Call rotation control.
   rotationControl();
   return;
   /*
