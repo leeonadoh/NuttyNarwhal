@@ -471,8 +471,8 @@ void AI_main(struct RoboAI *ai, struct blob *blobs, void *state)
    fprintf(stderr,"Self-ID complete. Current position: (%f,%f), current heading: [%f, %f], AI state=%d\n",ai->st.self->cx,ai->st.self->cy,ai->st.self->mx,ai->st.self->my,ai->st.state);
   }
  }
- else
- {
+ // else
+ // {
   /****************************************************************************
    TO DO:
    You will need to replace this 'catch-all' code with actual program logic to
@@ -491,8 +491,19 @@ void AI_main(struct RoboAI *ai, struct blob *blobs, void *state)
    state transitions and with calling the appropriate function based on what
    the bot is supposed to be doing.
   *****************************************************************************/
-  fprintf(stderr,"Just trackin'!\n");	// bot, opponent, and ball.
-  track_agents(ai,blobs);		// Currently, does nothing but endlessly track
+  // fprintf(stderr,"Just trackin'!\n");	// bot, opponent, and ball.
+  // track_agents(ai,blobs);		// Currently, does nothing but endlessly track
+  //code for chase ball states
+  else if (ai->st.state==201){
+    //move to ball
+    //ball position
+    double ballx = ai->st.ball->cx;
+    double bally = ai->st.ball->cy;
+
+  }
+  else if (ai->st.state==202){
+    //kick the ball
+  }
  }
 
 }
