@@ -33,6 +33,12 @@
 #include <nxtlibc/nxtlibc.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
+
+#define CAM_HEIGHT 768
+#define CAM_WIDTH 1024
+
+#define CLOSE_DIST 70
 
 void clear_motion_flags(struct RoboAI *ai)
 {
@@ -492,20 +498,13 @@ void AI_main(struct RoboAI *ai, struct blob *blobs, void *state)
    the bot is supposed to be doing.
   *****************************************************************************/
   // fprintf(stderr,"Just trackin'!\n");	// bot, opponent, and ball.
-  // track_agents(ai,blobs);		// Currently, does nothing but endlessly track
   //code for chase ball states
-  else if (ai->st.state==201){
-    //move to ball
-    //ball position
-    double ballx = ai->st.ball->cx;
-    double bally = ai->st.ball->cy;
-
+  else {
+    // printf("cx %f, cy %f, vx %f, vy %f\n", ai->st.old_bcx, ai->st.old_bcy, ai->st.bvx, ai->st.bvy);
+    // printf("STATE %d\n", ai->st.state);
+    penaltySM(ai);
   }
-  else if (ai->st.state==202){
-    //kick the ball
-  }
- }
-
+  track_agents(ai,blobs);		// Currently, does nothing but endlessly track
 }
 
 /**********************************************************************************
@@ -522,4 +521,54 @@ void AI_main(struct RoboAI *ai, struct blob *blobs, void *state)
  there.
 **********************************************************************************/
 
+// State machine tables
+// Transitions the given state to the next state depending on current status.
+void penaltySM(struct RoboAI *ai){
+  double vx, vy, qx, qy, vmag;
+  switch (ai->st.state) {
+    case 100: // Initial state
+      // Make sure ball is stable, and found.
+      if (ai->st.ballID && (fabs(ai->st.bvx) < 5 && fabs(ai->st.bvy) < 5)){
+        ai->st.state = 101;
+      }
+    break;
+    case 101: // Move to Q
+      // Within a certain distance from point q,
+      // go to state 102
+      // Calculate q, the point just behind the ball (relative to the direction where
+      // front = towards net)
+      vx = ai->st.old_bcx - ((ai->st.side) ? 0 : CAM_WIDTH);
+      vy = ai->st.old_bcy - CAM_HEIGHT / 2;
+      vmag = sqrt(vx*vx + vy*vy);
+      qx = ai->st.old_bcx + 45*vx/vmag;
+      qy = ai->st.old_bcy + 45*vy/vmag;
+      if (fabs(ai->st.old_scx-qx) < CLOSE_DIST && fabs(ai->st.old_scy-qy) < CLOSE_DIST){
+        ai->st.state = 102;
+      }
+      printf("101 Q: %f, %f | B: %f, %f | S: %f, %f\n", qx, qy, ai->st.old_bcx, ai->st.old_bcy, ai->st.old_scx, ai->st.old_scy);
+    break;
+    case 102: // Reach ball
+      // Within a certain distance from ball. Go to state 103
+      if (fabs(ai->st.old_scx - ai->st.old_bcx) < CLOSE_DIST && fabs(ai->st.old_scy - ai->st.old_bcy) < CLOSE_DIST){
+        ai->st.state = 103;
+      }
+      printf("102 B: %f, %f | S: %f, %f\n", ai->st.old_bcx, ai->st.old_bcy, ai->st.old_scx, ai->st.old_scy);
+    break;
+    case 103: // kick
+      // Ball is in motion. Go to state 104
+      if (ai->st.old_bcx*ai->st.old_bcx + ai->st.old_bcy*ai->st.old_bcy > 400){
+        ai->st.state = 104;
+      }
+      printf("103 B: %f, %f | S: %f, %f\n", ai->st.old_bcx, ai->st.old_bcy, ai->st.old_scx, ai->st.old_scy);
+      // Otherwise try kick again. Go to state 102
+      // else {
+      //   ai->st.state = 102;
+      // }
+      
+    break;
+    case 104: // Finished
+    fprintf(stderr, "finished.\n");
+    break;
+  }
+}
 
