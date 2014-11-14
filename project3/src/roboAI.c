@@ -38,7 +38,13 @@
 #define CAM_HEIGHT 768
 #define CAM_WIDTH 1024
 
-#define CLOSE_DIST 70
+#define CLOSE_DIST 100
+#define CLOSE_DIST_MORE 50
+#define ANG_THRES 5
+#define Q_DIST 130
+
+void chaseBallSM(struct RoboAI *ai);
+void penaltySM(struct RoboAI *ai);
 
 void clear_motion_flags(struct RoboAI *ai)
 {
@@ -317,7 +323,8 @@ void id_bot(struct RoboAI *ai, struct blob *blobs)
  static double stepID=0;
  double frame_inc=1.0/5.0;
 
- drive_speed(30);			// Start forward motion to establish heading
+// TODO: MODIFIED
+ drive_speed(-30);			// Start forward motion to establish heading
 					// Will move for a few frames.
 
  track_agents(ai,blobs);		// Call the tracking function to find each agent
@@ -463,18 +470,22 @@ void AI_main(struct RoboAI *ai, struct blob *blobs, void *state)
 
   ** Do not change the behaviour of the robot ID routine **
  **************************************************************************/
-
- if (ai->st.state==0||ai->st.state==100||ai->st.state==200)  	// Initial set up - find own, ball, and opponent blobs
+ if (ai->st.state==0||ai->st.state==100||ai->st.state==200)   // Initial set up - find own, ball, and opponent blobs
  {
   // Carry out self id process.
   fprintf(stderr,"Initial state, self-id in progress...\n");
   id_bot(ai,blobs);
-  if ((ai->st.state%100)!=0)	// The id_bot() routine will change the AI state to initial state + 1
-  {				// if robot identification is successful.
+  if ((ai->st.state%100)!=0)  // The id_bot() routine will change the AI state to initial state + 1
+  {       // if robot identification is successful.
    if (ai->st.self->cx>=512) ai->st.side=1; else ai->st.side=0;
    all_stop();
    clear_motion_flags(ai);
    fprintf(stderr,"Self-ID complete. Current position: (%f,%f), current heading: [%f, %f], AI state=%d\n",ai->st.self->cx,ai->st.self->cy,ai->st.self->mx,ai->st.self->my,ai->st.state);
+  }
+  if (ai->st.side == 1){
+    ai->st.direction_Toggle = -1;
+  } else {
+    ai->st.direction_Toggle = 1;
   }
  }
  // else
@@ -499,12 +510,21 @@ void AI_main(struct RoboAI *ai, struct blob *blobs, void *state)
   *****************************************************************************/
   // fprintf(stderr,"Just trackin'!\n");	// bot, opponent, and ball.
   //code for chase ball states
-  else {
+  else if (ai->st.state/100 == 1){
     // printf("cx %f, cy %f, vx %f, vy %f\n", ai->st.old_bcx, ai->st.old_bcy, ai->st.bvx, ai->st.bvy);
     // printf("STATE %d\n", ai->st.state);
     penaltySM(ai);
+  } 
+  else if (ai->st.state/100 == 2){
+    chaseBallSM(ai);
   }
-  track_agents(ai,blobs);		// Currently, does nothing but endlessly track
+  if (acos(ai->st.self->dy*ai->st.old_sdy + ai->st.self->dx*ai->st.old_sdx) > 3){
+    ai->st.direction_Toggle = ai->st.direction_Toggle * -1;
+  }
+  printf("state: %d\n", ai->st.state);
+  ai->st.old_sdx = ai->st.self->dx;
+  ai->st.old_sdy = ai->st.self->dy;
+  track_agents(ai,blobs);   // Currently, does nothing but endlessly track
 }
 
 /**********************************************************************************
@@ -521,9 +541,104 @@ void AI_main(struct RoboAI *ai, struct blob *blobs, void *state)
  there.
 **********************************************************************************/
 
+// Rotates the robot (if needed) and move to the specified point. 
+// Will continue moving until state machine transitions out. 
+void moveInDirection(struct RoboAI *ai, double x, double y){
+  // Check orientation.
+  // Find vector from bot to ball.
+  double dx = x - ai->st.old_scx;
+  double dy = y - ai->st.old_scy;
+  double sx;
+  double sy;
+  // The angles of both vectors.
+  double dtheta = atan2(dy, dx);
+  double stheta = atan2(ai->st.direction_Toggle*ai->st.self->dy, ai->st.direction_Toggle*ai->st.self->dx);
+  // Normalize angles to 0, 2PI
+  dtheta = (dtheta < 0) ? dtheta + 2*M_PI : dtheta;
+  stheta = (stheta < 0) ? stheta + 2*M_PI : stheta;
+  double angle = dtheta - stheta;
+  angle = (angle < 0) ? angle + 2*M_PI : angle;
+  angle = angle * 180/M_PI; // Convert to deg for now.
+  // If oriented, more forward. 
+  printf("toggle %d\n", ai->st.direction_Toggle);
+  if ((angle >= 0 && angle < ANG_THRES) || (angle > (360-ANG_THRES) && angle <= 360)){
+    drive_speed(-40);
+  } else if (angle > 180){
+    turn_left_speed(-30);
+  } else {
+    turn_right_speed(-30);
+  }
+}
+
+void moveAndKick(int speed){
+  retract();
+  drive_speed(-speed);
+}
+
+void chaseBallSM(struct RoboAI *ai){
+  double dx, dy;
+  switch (ai->st.state) {
+    case 200:
+      // Initial state for chase ball. Make sure ball is stationary.
+      if (ai->st.ballID && (fabs(ai->st.bvx) < 5 && fabs(ai->st.bvy) < 5)){
+        ai->st.state = 201;
+      }
+    break;
+    case 201: // Move to ball.
+      stop_kicker();
+      moveInDirection(ai, ai->st.old_bcx, ai->st.old_bcy);
+
+      dx = ai->st.old_scx - ai->st.old_bcx;
+      dy = ai->st.old_scy - ai->st.old_bcy;
+      if (!ai->st.ballID){
+        ai->st.state = 203;
+      }
+      // Within a certain distance from ball. Go to state 202
+      else if (dx*dx + dy*dy < CLOSE_DIST*CLOSE_DIST){
+        ai->st.state = 202;
+      }
+      // printf("102 B: %f, %f | S: %f, %f\n", ai->st.old_bcx, ai->st.old_bcy, ai->st.old_scx, ai->st.old_scy);
+    break;
+    case 202: // Kick the ball.
+      dx = ai->st.old_scx - ai->st.old_bcx;
+      dy = ai->st.old_scy - ai->st.old_bcy;
+
+      moveAndKick(30);
+      if (!ai->st.ballID){
+        ai->st.state = 203;
+      } 
+      else if (ai->st.bvx*ai->st.bvx + ai->st.bvy*ai->st.bvy > 200 || 
+               dx*dx + dy*dy < CLOSE_DIST*CLOSE_DIST*16){
+        ai->st.state = 201;
+      }
+    break;
+    case 203: // attempt to reveal ball by going reverse.
+      // If we hit border, ball is out of bounds.
+      // If ball reveals, continue playing. 
+      stop_kicker();
+      reverse_speed(-30);
+
+      if (ai->st.ballID) {
+        ai->st.state = 201;
+      }
+      else if ((ai->st.old_scx < CLOSE_DIST || (CAM_WIDTH - ai->st.old_scx) < CLOSE_DIST) || 
+               (ai->st.old_scy < CLOSE_DIST || (CAM_HEIGHT - ai->st.old_scy) < CLOSE_DIST)){
+        ai->st.state = 204;
+      }
+    break;
+    case 204: //finish
+      all_stop();
+      stop_kicker();
+    break;
+
+  }
+}
+
 // State machine tables
 // Transitions the given state to the next state depending on current status.
 void penaltySM(struct RoboAI *ai){
+  static int satisfactionCount;
+
   double vx, vy, qx, qy, vmag;
   switch (ai->st.state) {
     case 100: // Initial state
@@ -540,34 +655,55 @@ void penaltySM(struct RoboAI *ai){
       vx = ai->st.old_bcx - ((ai->st.side) ? 0 : CAM_WIDTH);
       vy = ai->st.old_bcy - CAM_HEIGHT / 2;
       vmag = sqrt(vx*vx + vy*vy);
-      qx = ai->st.old_bcx + 45*vx/vmag;
-      qy = ai->st.old_bcy + 45*vy/vmag;
-      if (fabs(ai->st.old_scx-qx) < CLOSE_DIST && fabs(ai->st.old_scy-qy) < CLOSE_DIST){
+      qx = ai->st.old_bcx + Q_DIST*vx/vmag;
+      qy = ai->st.old_bcy + Q_DIST*vy/vmag;
+
+      stop_kicker();
+      moveInDirection(ai, qx, qy);
+      if (fabs(ai->st.old_scx-qx) < CLOSE_DIST_MORE && fabs(ai->st.old_scy-qy) < CLOSE_DIST_MORE){
+        all_stop();
         ai->st.state = 102;
       }
-      printf("101 Q: %f, %f | B: %f, %f | S: %f, %f\n", qx, qy, ai->st.old_bcx, ai->st.old_bcy, ai->st.old_scx, ai->st.old_scy);
+      //printf("101 Q: %f, %f | B: %f, %f | S: %f, %f\n", qx, qy, ai->st.old_bcx, ai->st.old_bcy, ai->st.old_scx, ai->st.old_scy);
     break;
     case 102: // Reach ball
       // Within a certain distance from ball. Go to state 103
-      if (fabs(ai->st.old_scx - ai->st.old_bcx) < CLOSE_DIST && fabs(ai->st.old_scy - ai->st.old_bcy) < CLOSE_DIST){
+      stop_kicker();
+      moveInDirection(ai, ai->st.old_bcx, ai->st.old_bcy);
+
+      vx = ai->st.old_scx - ai->st.old_bcx;
+      vy = ai->st.old_scy - ai->st.old_bcy;
+      if (vx*vx + vy*vy < CLOSE_DIST*CLOSE_DIST){
         ai->st.state = 103;
       }
-      printf("102 B: %f, %f | S: %f, %f\n", ai->st.old_bcx, ai->st.old_bcy, ai->st.old_scx, ai->st.old_scy);
+      // printf("102 B: %f, %f | S: %f, %f\n", ai->st.old_bcx, ai->st.old_bcy, ai->st.old_scx, ai->st.old_scy);
     break;
     case 103: // kick
+      //if (drand48() >= 0.5) {
+        moveAndKick(30);
+      //}
+      //else {
+      //  stop_kicker();
+      //}
       // Ball is in motion. Go to state 104
-      if (ai->st.old_bcx*ai->st.old_bcx + ai->st.old_bcy*ai->st.old_bcy > 400){
+      if (ai->st.bvx*ai->st.bvx + ai->st.bvy*ai->st.bvy > 300){
+        satisfactionCount ++;
+      } else {
+        satisfactionCount = 0;
+      }
+      if (satisfactionCount > 2){
         ai->st.state = 104;
       }
-      printf("103 B: %f, %f | S: %f, %f\n", ai->st.old_bcx, ai->st.old_bcy, ai->st.old_scx, ai->st.old_scy);
+      printf("satisfied for: %d\n", satisfactionCount);
       // Otherwise try kick again. Go to state 102
       // else {
       //   ai->st.state = 102;
-      // }
-      
+      // }    
     break;
     case 104: // Finished
-    fprintf(stderr, "finished.\n");
+      stop_kicker();
+      all_stop();
+      fprintf(stderr, "finished.\n");
     break;
   }
 }

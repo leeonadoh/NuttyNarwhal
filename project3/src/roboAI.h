@@ -72,6 +72,10 @@ struct AI_data{
 	double old_scx, old_scy;	// Previous self (cx,cy)
 	double svx,svy;			// Current self [vx vy]
 	double smx,smy;			// Self heading
+	// The below two added variables help with detecting the actual direction vector,
+	// since the one provided in the blobs always point right.
+	double old_sdx, old_sdy; // Stores previous direction vector.
+	int direction_Toggle; // Used to detect when the direction vector flips over.
 
 	// Opponent track data. Done separately each frame
         struct blob *opp;		// Current opponent blob
