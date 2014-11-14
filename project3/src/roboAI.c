@@ -38,10 +38,10 @@
 #define CAM_HEIGHT 768
 #define CAM_WIDTH 1024
 
-#define CLOSE_DIST 100
-#define CLOSE_DIST_MORE 50
+#define CLOSE_DIST 80 //100
+#define CLOSE_DIST_MORE 40 //50
 #define ANG_THRES 5
-#define Q_DIST 130
+#define Q_DIST 115 //130
 
 void chaseBallSM(struct RoboAI *ai);
 void penaltySM(struct RoboAI *ai);
@@ -578,8 +578,8 @@ void moveAndKick(int speed){
 void chaseBallSM(struct RoboAI *ai){
   double dx, dy;
   switch (ai->st.state) {
-    case 200:
-      // Initial state for chase ball. Make sure ball is stationary.
+    case 200: // Initial state for chase ball. 
+      // Make sure ball is stationary.
       if (ai->st.ballID && (fabs(ai->st.bvx) < 5 && fabs(ai->st.bvy) < 5)){
         ai->st.state = 201;
       }
@@ -597,7 +597,6 @@ void chaseBallSM(struct RoboAI *ai){
       else if (dx*dx + dy*dy < CLOSE_DIST*CLOSE_DIST){
         ai->st.state = 202;
       }
-      // printf("102 B: %f, %f | S: %f, %f\n", ai->st.old_bcx, ai->st.old_bcy, ai->st.old_scx, ai->st.old_scy);
     break;
     case 202: // Kick the ball.
       dx = ai->st.old_scx - ai->st.old_bcx;
@@ -629,6 +628,7 @@ void chaseBallSM(struct RoboAI *ai){
     case 204: //finish
       all_stop();
       stop_kicker();
+      printf("Chase ball state machine done.");
     break;
 
   }
@@ -679,13 +679,9 @@ void penaltySM(struct RoboAI *ai){
       // printf("102 B: %f, %f | S: %f, %f\n", ai->st.old_bcx, ai->st.old_bcy, ai->st.old_scx, ai->st.old_scy);
     break;
     case 103: // kick
-      //if (drand48() >= 0.5) {
         moveAndKick(30);
-      //}
-      //else {
-      //  stop_kicker();
-      //}
       // Ball is in motion. Go to state 104
+      // Make sure this was not a bad sensor reading by checking it 3 times.
       if (ai->st.bvx*ai->st.bvx + ai->st.bvy*ai->st.bvy > 300){
         satisfactionCount ++;
       } else {
@@ -694,7 +690,7 @@ void penaltySM(struct RoboAI *ai){
       if (satisfactionCount > 2){
         ai->st.state = 104;
       }
-      printf("satisfied for: %d\n", satisfactionCount);
+      printf("Kick satisfied for: %d\n", satisfactionCount);
       // Otherwise try kick again. Go to state 102
       // else {
       //   ai->st.state = 102;
@@ -703,7 +699,7 @@ void penaltySM(struct RoboAI *ai){
     case 104: // Finished
       stop_kicker();
       all_stop();
-      fprintf(stderr, "finished.\n");
+      fprintf(stderr, "Penalty state machine done.\n");
     break;
   }
 }
