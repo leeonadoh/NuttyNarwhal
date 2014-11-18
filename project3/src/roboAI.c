@@ -35,13 +35,15 @@
 #include <stdlib.h>
 #include <math.h>
 
+// Field size: 6 x 5 Leo's feet.
 #define CAM_HEIGHT 768
 #define CAM_WIDTH 1024
 
+#define SD 120
 #define CLOSE_DIST 80 //100
-#define CLOSE_DIST_MORE 40 //50
+#define CLOSE_DIST_MORE 30 //50
 #define ANG_THRES 5
-#define Q_DIST 115 //130
+#define Q_DIST 120 //130
 
 void chaseBallSM(struct RoboAI *ai);
 void penaltySM(struct RoboAI *ai);
@@ -508,20 +510,19 @@ void AI_main(struct RoboAI *ai, struct blob *blobs, void *state)
    state transitions and with calling the appropriate function based on what
    the bot is supposed to be doing.
   *****************************************************************************/
-  // fprintf(stderr,"Just trackin'!\n");	// bot, opponent, and ball.
-  //code for chase ball states
   else if (ai->st.state/100 == 1){
-    // printf("cx %f, cy %f, vx %f, vy %f\n", ai->st.old_bcx, ai->st.old_bcy, ai->st.bvx, ai->st.bvy);
-    // printf("STATE %d\n", ai->st.state);
+    // Penalty kick state.
     penaltySM(ai);
   } 
   else if (ai->st.state/100 == 2){
+    // Chase ball state.
     chaseBallSM(ai);
   }
-  if (acos(ai->st.self->dy*ai->st.old_sdy + ai->st.self->dx*ai->st.old_sdx) > 3){
+  if (acos(ai->st.self->dy*ai->st.old_sdy + ai->st.self->dx*ai->st.old_sdx) > 1.75){
     ai->st.direction_Toggle = ai->st.direction_Toggle * -1;
   }
-  printf("state: %d\n", ai->st.state);
+  printf("Current state: %d | Direction Toggle: %d\n", ai->st.state, ai->st.direction_Toggle);
+  printf("%f\n", ai->st.self->dy*ai->st.self->dy + ai->st.self->dx*ai->st.self->dx);
   ai->st.old_sdx = ai->st.self->dx;
   ai->st.old_sdy = ai->st.self->dy;
   track_agents(ai,blobs);   // Currently, does nothing but endlessly track
@@ -543,13 +544,17 @@ void AI_main(struct RoboAI *ai, struct blob *blobs, void *state)
 
 // Rotates the robot (if needed) and move to the specified point. 
 // Will continue moving until state machine transitions out. 
-void moveInDirection(struct RoboAI *ai, double x, double y){
+void moveInDirection(struct RoboAI *ai, double x, double y, int pivot, int minSpeed){
   // Check orientation.
   // Find vector from bot to ball.
   double dx = x - ai->st.old_scx;
   double dy = y - ai->st.old_scy;
-  double sx;
-  double sy;
+  double dMag = dx*dx + dy*dy;
+  int actualSpeed = minSpeed;
+
+  actualSpeed = minSpeed + (10 * (dMag / (SD*SD)));
+  actualSpeed = actualSpeed > 100 ? 100 : actualSpeed;
+
   // The angles of both vectors.
   double dtheta = atan2(dy, dx);
   double stheta = atan2(ai->st.direction_Toggle*ai->st.self->dy, ai->st.direction_Toggle*ai->st.self->dx);
@@ -560,21 +565,33 @@ void moveInDirection(struct RoboAI *ai, double x, double y){
   angle = (angle < 0) ? angle + 2*M_PI : angle;
   angle = angle * 180/M_PI; // Convert to deg for now.
   // If oriented, more forward. 
-  printf("toggle %d\n", ai->st.direction_Toggle);
+
   if ((angle >= 0 && angle < ANG_THRES) || (angle > (360-ANG_THRES) && angle <= 360)){
-    drive_speed(-40);
+    drive_speed(-actualSpeed);
   } else if (angle > 180){
-    turn_left_speed(-30);
+    if (pivot){
+      pivot_left_speed(-actualSpeed * 3/5);
+    } else {
+      turn_left_speed(-actualSpeed * 3/5);
+    }
   } else {
-    turn_right_speed(-30);
+    if (pivot){
+      pivot_right_speed(-actualSpeed * 3/5);
+    } else {
+      turn_right_speed(-actualSpeed * 3/5);
+    }
   }
 }
 
+// Move forward and kick at the given speed. 
 void moveAndKick(int speed){
+  // IDEA: Make kicker toggle between on and off on each iteration. 
   retract();
   drive_speed(-speed);
 }
 
+// Chase ball state machine. If statements control transitions, 
+// while the rest of each case statement executes the state. 
 void chaseBallSM(struct RoboAI *ai){
   double dx, dy;
   switch (ai->st.state) {
@@ -586,7 +603,7 @@ void chaseBallSM(struct RoboAI *ai){
     break;
     case 201: // Move to ball.
       stop_kicker();
-      moveInDirection(ai, ai->st.old_bcx, ai->st.old_bcy);
+      moveInDirection(ai, ai->st.old_bcx, ai->st.old_bcy, 0, 30);
 
       dx = ai->st.old_scx - ai->st.old_bcx;
       dy = ai->st.old_scy - ai->st.old_bcy;
@@ -634,8 +651,7 @@ void chaseBallSM(struct RoboAI *ai){
   }
 }
 
-// State machine tables
-// Transitions the given state to the next state depending on current status.
+// Penalty kick state machine. 
 void penaltySM(struct RoboAI *ai){
   static int satisfactionCount;
 
@@ -659,17 +675,17 @@ void penaltySM(struct RoboAI *ai){
       qy = ai->st.old_bcy + Q_DIST*vy/vmag;
 
       stop_kicker();
-      moveInDirection(ai, qx, qy);
-      if (fabs(ai->st.old_scx-qx) < CLOSE_DIST_MORE && fabs(ai->st.old_scy-qy) < CLOSE_DIST_MORE){
+      moveInDirection(ai, qx, qy, 0, 30);
+      if (fabs(ai->st.old_scy-qy) < CLOSE_DIST_MORE){
         all_stop();
         ai->st.state = 102;
       }
-      //printf("101 Q: %f, %f | B: %f, %f | S: %f, %f\n", qx, qy, ai->st.old_bcx, ai->st.old_bcy, ai->st.old_scx, ai->st.old_scy);
+      // printf("101 Q: %f, %f | B: %f, %f | S: %f, %f\n", qx, qy, ai->st.old_bcx, ai->st.old_bcy, ai->st.old_scx, ai->st.old_scy);
     break;
     case 102: // Reach ball
       // Within a certain distance from ball. Go to state 103
       stop_kicker();
-      moveInDirection(ai, ai->st.old_bcx, ai->st.old_bcy);
+      moveInDirection(ai, ai->st.old_bcx, ai->st.old_bcy, 1, 20);
 
       vx = ai->st.old_scx - ai->st.old_bcx;
       vy = ai->st.old_scy - ai->st.old_bcy;
@@ -682,7 +698,7 @@ void penaltySM(struct RoboAI *ai){
         moveAndKick(30);
       // Ball is in motion. Go to state 104
       // Make sure this was not a bad sensor reading by checking it 3 times.
-      if (ai->st.bvx*ai->st.bvx + ai->st.bvy*ai->st.bvy > 300){
+      if (ai->st.bvx*ai->st.bvx + ai->st.bvy*ai->st.bvy > 200){
         satisfactionCount ++;
       } else {
         satisfactionCount = 0;
