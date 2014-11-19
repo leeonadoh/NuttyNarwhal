@@ -518,7 +518,7 @@ void AI_main(struct RoboAI *ai, struct blob *blobs, void *state)
     // Chase ball state.
     chaseBallSM(ai);
   }
-  if (acos(ai->st.self->dy*ai->st.old_sdy + ai->st.self->dx*ai->st.old_sdx) > 1.75){
+  if (acos(ai->st.self->dy*ai->st.old_sdy + ai->st.self->dx*ai->st.old_sdx) > 2.5){
     ai->st.direction_Toggle = ai->st.direction_Toggle * -1;
   }
   printf("Current state: %d | Direction Toggle: %d\n", ai->st.state, ai->st.direction_Toggle);
@@ -580,6 +580,113 @@ void moveInDirection(struct RoboAI *ai, double x, double y, int pivot, int minSp
     } else {
       turn_right_speed(-actualSpeed * 3/5);
     }
+  }
+}
+
+/**
+* Return whether the path from b to g is obstructed by o with specified size. 
+*/
+int hasClearPath(int size, double gx, double gy, double ox, double oy, double bx, double by){
+  // Reuse variables to avoid unnecessary memory use. 
+  // Let o now be vector from b to o.
+  ox = ox - bx;
+  oy = oy - by;
+  // Let g now be vector from b to g
+  gx = gx - bx;
+  gy = gy - by;
+  // If b is currently within the size of o
+  if (ox*ox + oy*oy < size*size){
+    return 0;
+  }
+  // If obstacle is behind us, then we have clear path.
+  else if (ox*gx + oy*gy < 0){
+    return 1;
+  }
+  // See if mag of rejection of o onto g is greater than size. 
+  // If true, then we have clear path.
+  // projected vector is = (o dot g / |g|^2 * g)
+  double temp = (ox*gx + oy*gy)/(gx*gx + gy*gy);
+  ox = ox - temp*gx;
+  oy = oy - temp*gy; 
+  return ex*ex + ey*ey > size*size;
+}
+
+/**
+* Return whether we should be attacking. True -> attack mode.
+*/
+int attackMode(struct RoboAI *ai){
+  // Note: Go into defense mode when opponent and ball near our goal?
+  // If side is 0, meaning we are on left side, goal is on right side (x=1024)
+  double vToGoalx = (ai->st.side ? 0 : CAM_WIDTH) - ai->st.old_ocx;
+  double vToGoaly = CAM_HEIGHT/2 - ai->st.old_ocy;
+  double vToBallx = ai->st.old_bcx - ai->st.old_ocx;
+  double vToBally = ai->st.old_bcy - ai->st.old_ocy;
+  return vToGoalx*vToBallx + vToGoaly*vToBallx < 0;
+}
+
+/**
+* Return whether point p is covered by opponent.
+*/
+int pointObstructed(struct RoboAI *ai, int size, double px, double py){
+  // return true if opponent is within size distance of ball.
+  return tempX*tempX + tempY*tempY < size*size;
+  // TODO identify when ball is out of field?
+}
+
+void findQ(struct RoboAI *ai, double *qx, double *qy, int backoffDist){
+  double vx = ai->st.old_bcx - (ai->st.side ? 0 : CAM_WIDTH);
+  double vy = ai->st.old_bcy - CAM_HEIGHT / 2;
+  double vmag = sqrt(vx*vx + vy*vy);
+  *qx = ai->st.old_bcx + backoffDist*vx/vmag;
+  *qy = ai->st.old_bcy + backoffDist*vy/vmag;
+}
+
+/**
+* Return the direction for point b to travel in to avoid obstacle.
+* rx, ry: Position for the bot to move to. 
+* gx, gy: Position of target.
+* ox, oy: Position of obstacle.
+* bx, by: Position of source. 
+* size: size of the obstacle. 
+*/
+int obstAvoid(double *rx, double *ry, double gx, double gy, double ox, double oy, double bx, double by, int size){
+  // If a clear path already exists, simply return g as unit vector.
+  if (hasClearPath(size, gx, gy, ox, oy, bx, by)){
+    // gx = gx - bx;
+    // gy = gy - by;
+    // double mag = sqrt(gx*gx + gy*gy);
+    // *rx = gx/mag;
+    // *ry = gy/mag;
+    *rx = gx;
+    *ry = gy;
+    return true;
+  } else {
+    // Else, the obstacle is in our path, or covering us. Move in a direction to avoid it. 
+    // Establish new direction by finding rejection vector.
+    // let e = vector from b to o.
+    // let p = vector from b to g.
+    // let d = negative rejection vector found by projecting e onto p, unified. 
+    // r = (o + size*d) - b, unified, which is the optimal direction to go in to avoid obstacle. 
+    double ex = ox - bx;
+    double ey = oy - by;
+    double px = gx - bx;
+    double py = gy - by;
+
+    double temp = (ex*px + ey*py) / (px*px + py*py);
+    // Reuse gx and gy (d = g) 
+    gx = temp * px - ox;
+    gy = temp * py - oy;
+
+    temp = sqrt(gx*gx + gy*gy);
+
+    // gx = ox + gx/temp*size - bx;
+    // gy = oy + gy/temp*size - by;
+    // temp = sqrt(gx*gx + gy*gy);
+    // *rx = gx / temp;
+    // *ry = gy / temp;
+    *rx = ox + size*gx/temp;
+    *ry = oy + size*gy/temp;
+    return false;
   }
 }
 
@@ -647,7 +754,6 @@ void chaseBallSM(struct RoboAI *ai){
       stop_kicker();
       printf("Chase ball state machine done.");
     break;
-
   }
 }
 
