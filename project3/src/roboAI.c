@@ -39,7 +39,7 @@
 #define CAM_HEIGHT 768
 #define CAM_WIDTH 1024
 
-#define SD 120
+#define SD 110 // Unit of distance, where each distance of SD implies a change in movement speed.
 #define CLOSE_DIST 80 //100
 #define CLOSE_DIST_MORE 30 //50
 #define ANG_THRES 5
@@ -584,7 +584,12 @@ void moveInDirection(struct RoboAI *ai, double x, double y, int pivot, int minSp
 }
 
 /**
-* Return whether the path from b to g is obstructed by o with specified size. 
+* Return whether the path from source to target is obstructed by o with specified size. 
+* size: Radius of the obstacle.
+* gx, gy: The position of the target.
+* ox, oy: The position of the obstacle.
+* bx, by: The position of the source.
+* Return true if obstructed.  
 */
 int hasClearPath(int size, double gx, double gy, double ox, double oy, double bx, double by){
   // Reuse variables to avoid unnecessary memory use. 
@@ -633,6 +638,12 @@ int pointObstructed(struct RoboAI *ai, int size, double px, double py){
   // TODO identify when ball is out of field?
 }
 
+/**
+ * Locate the optimal point q to be at to kick the ball into goal. 
+ * ai: robot ai struct
+ * qx, qy: Computed q value is stored here.
+ * backoffDist: the distance that should be between q and ball. 
+*/
 void findQ(struct RoboAI *ai, double *qx, double *qy, int backoffDist){
   double vx = ai->st.old_bcx - (ai->st.side ? 0 : CAM_WIDTH);
   double vy = ai->st.old_bcy - CAM_HEIGHT / 2;
@@ -642,12 +653,13 @@ void findQ(struct RoboAI *ai, double *qx, double *qy, int backoffDist){
 }
 
 /**
-* Return the direction for point b to travel in to avoid obstacle.
+* Find the point for the source to travel to while avoiding the obstacle.
 * rx, ry: Position for the bot to move to. 
 * gx, gy: Position of target.
 * ox, oy: Position of obstacle.
 * bx, by: Position of source. 
-* size: size of the obstacle. 
+* size: radius of the obstacle.
+* return: true if there's a clear path from b to g. False if an avoidance path is computed. 
 */
 int obstAvoid(double *rx, double *ry, double gx, double gy, double ox, double oy, double bx, double by, int size){
   // If a clear path already exists, simply return g as unit vector.
@@ -665,18 +677,20 @@ int obstAvoid(double *rx, double *ry, double gx, double gy, double ox, double oy
     // Establish new direction by finding rejection vector.
     // let e = vector from b to o.
     // let p = vector from b to g.
-    // let d = negative rejection vector found by projecting e onto p, unified. 
-    // r = (o + size*d) - b, unified, which is the optimal direction to go in to avoid obstacle. 
+    // let g = negative rejection vector found by projecting e onto p, unified. 
     double ex = ox - bx;
     double ey = oy - by;
     double px = gx - bx;
     double py = gy - by;
 
     double temp = (ex*px + ey*py) / (px*px + py*py);
-    // Reuse gx and gy (d = g) 
+    // Reuse gx and gy
     gx = temp * px - ox;
     gy = temp * py - oy;
 
+    // let r be the point to go in to avoid the obstacle.
+    // r = o + size*(g/|g|) = a point just on the edge of the circle created with center at o, of radius size. 
+    // Since we're using  
     temp = sqrt(gx*gx + gy*gy);
 
     // gx = ox + gx/temp*size - bx;
