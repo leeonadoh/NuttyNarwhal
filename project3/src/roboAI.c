@@ -39,7 +39,7 @@
 #define CAM_HEIGHT 768
 #define CAM_WIDTH 1024
 
-#define SD 110 // Unit of distance, where each distance of SD implies a change in movement speed.
+#define SD 130 // Unit of distance, where each distance of SD implies a change in movement speed.
 #define CLOSE_DIST 80 //100
 #define CLOSE_DIST_MORE 30 //50
 #define ANG_THRES 5
@@ -466,12 +466,13 @@ void AI_main(struct RoboAI *ai, struct blob *blobs, void *state)
 
   Relevant UI keyboard commands:
   'r' - reset the AI. Will set AI state to zero and re-initialize the AI
-	data structure.
+  data structure.
   't' - Toggle the AI routine (i.e. start/stop calls to AI_main() ).
   'o' - Robot immediate all-stop! - do not allow your NXT to get damaged!
 
   ** Do not change the behaviour of the robot ID routine **
  **************************************************************************/
+ printf ("Self bot found: %d\n", ai->st.selfID);
  if (ai->st.state==0||ai->st.state==100||ai->st.state==200)   // Initial set up - find own, ball, and opponent blobs
  {
   // Carry out self id process.
@@ -518,14 +519,14 @@ void AI_main(struct RoboAI *ai, struct blob *blobs, void *state)
     // Chase ball state.
     chaseBallSM(ai);
   }
+  //printf("Current state: %d | Direction Toggle: %d\n", ai->st.state, ai->st.direction_Toggle);
+  //printf("%f\n", ai->st.self->dy*ai->st.self->dy + ai->st.self->dx*ai->st.self->dx);
+  track_agents(ai,blobs);   // Currently, does nothing but endlessly track
   if (acos(ai->st.self->dy*ai->st.old_sdy + ai->st.self->dx*ai->st.old_sdx) > 2.5){
     ai->st.direction_Toggle = ai->st.direction_Toggle * -1;
   }
-  printf("Current state: %d | Direction Toggle: %d\n", ai->st.state, ai->st.direction_Toggle);
-  printf("%f\n", ai->st.self->dy*ai->st.self->dy + ai->st.self->dx*ai->st.self->dx);
   ai->st.old_sdx = ai->st.self->dx;
   ai->st.old_sdy = ai->st.self->dy;
-  track_agents(ai,blobs);   // Currently, does nothing but endlessly track
 }
 
 /**********************************************************************************
@@ -556,31 +557,38 @@ void moveInDirection(struct RoboAI *ai, double x, double y, int pivot, int minSp
   actualSpeed = actualSpeed > 100 ? 100 : actualSpeed;
 
   // The angles of both vectors.
-  double dtheta = atan2(dy, dx);
-  double stheta = atan2(ai->st.direction_Toggle*ai->st.self->dy, ai->st.direction_Toggle*ai->st.self->dx);
+  double _dtheta = atan2(dy, dx);
+  double _stheta = atan2(ai->st.direction_Toggle*ai->st.self->dy, ai->st.direction_Toggle*ai->st.self->dx);
   // Normalize angles to 0, 2PI
-  dtheta = (dtheta < 0) ? dtheta + 2*M_PI : dtheta;
-  stheta = (stheta < 0) ? stheta + 2*M_PI : stheta;
-  double angle = dtheta - stheta;
-  angle = (angle < 0) ? angle + 2*M_PI : angle;
-  angle = angle * 180/M_PI; // Convert to deg for now.
+  _dtheta = (_dtheta < 0) ? _dtheta + 2*M_PI : _dtheta;
+  _stheta = (_stheta < 0) ? _stheta + 2*M_PI : _stheta;
+  int dtheta = (int)(_dtheta * 180/M_PI);
+  int stheta = (int)(_stheta * 180/M_PI);
+  double angle = ((((dtheta - stheta) % 360) + 540) % 360) - 180;
+  // double angle = dtheta - stheta;
+  // angle = (angle < 0) ? angle + 2*M_PI : angle;
+  // angle = angle * 180/M_PI; // Convert to deg for now.
+  // angle = angle > 180 
   // If oriented, more forward. 
-
-  if ((angle >= 0 && angle < ANG_THRES) || (angle > (360-ANG_THRES) && angle <= 360)){
+  int rotSpeed = (angle > 0) ? (int)(15 + angle/3) : (int)(-15 + angle/3);
+  printf("Angle: %f, toggle: %d, rSpeed: %d\n", angle, ai->st.direction_Toggle, rotSpeed);
+  if (fabs(angle) <= 7){
     drive_speed(-actualSpeed);
-  } else if (angle > 180){
-    if (pivot){
-      pivot_left_speed(-actualSpeed * 3/5);
-    } else {
-      turn_left_speed(-actualSpeed * 3/5);
+  }
+  else if (pivot){
+    if (angle < 0){
+      pivot_left_speed(-actualSpeed * 3/4);
+    } else{
+      pivot_right_speed(-actualSpeed * 3/4);
     }
   } else {
-    if (pivot){
-      pivot_right_speed(-actualSpeed * 3/5);
+    if (fabs(angle) <= 45){
+      drive_custom(-(actualSpeed + rotSpeed), -(actualSpeed - rotSpeed));// TODO: Flip sign when controls are fixed.
     } else {
-      turn_right_speed(-actualSpeed * 3/5);
+      drive_custom(-rotSpeed, rotSpeed); // TODO: Flip sign when controls are fixed.
     }
   }
+  printf("Move completed\n");
 }
 
 /**
@@ -613,7 +621,7 @@ int hasClearPath(int size, double gx, double gy, double ox, double oy, double bx
   double temp = (ox*gx + oy*gy)/(gx*gx + gy*gy);
   ox = ox - temp*gx;
   oy = oy - temp*gy; 
-  return ex*ex + ey*ey > size*size;
+  return ox*ox + oy*oy > size*size;
 }
 
 /**
@@ -634,7 +642,9 @@ int attackMode(struct RoboAI *ai){
 */
 int pointObstructed(struct RoboAI *ai, int size, double px, double py){
   // return true if opponent is within size distance of ball.
-  return tempX*tempX + tempY*tempY < size*size;
+  px = ai->st.old_ocx - px;
+  py = ai->st.old_ocy - py;
+  return px*px + py*py < size*size;
   // TODO identify when ball is out of field?
 }
 
@@ -671,7 +681,7 @@ int obstAvoid(double *rx, double *ry, double gx, double gy, double ox, double oy
     // *ry = gy/mag;
     *rx = gx;
     *ry = gy;
-    return true;
+    return 1;
   } else {
     // Else, the obstacle is in our path, or covering us. Move in a direction to avoid it. 
     // Establish new direction by finding rejection vector.
@@ -700,7 +710,7 @@ int obstAvoid(double *rx, double *ry, double gx, double gy, double ox, double oy
     // *ry = gy / temp;
     *rx = ox + size*gx/temp;
     *ry = oy + size*gy/temp;
-    return false;
+    return 0;
   }
 }
 
