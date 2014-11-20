@@ -66,6 +66,7 @@ struct AI_data{
 	double old_bcx, old_bcy;	// Previous ball cx,cy
 	double bvx,bvy;			// Ball velocity vector
 	double bmx,bmy;			// Ball heading
+	int satisfactionCount; // Used to determine whether the ball is truly in motion.
 
 	// Self track data. Done separately each frame
         struct blob *self;		// Current self blob
@@ -136,5 +137,31 @@ void clear_motion_flags(struct RoboAI *ai);
    Add headers for your own functions implementing the bot's soccer
    playing functionality below.
 *****************************************************************************/
+
+void chaseBallSM(struct RoboAI *ai);
+void penaltySM(struct RoboAI *ai);
+void soccerSM(struct RoboAI *ai);
+
+inline void soccerSMTrans(struct RoboAI *ai, double *Rx, double *Ry, double *qx, double*qy);
+inline int ssmTransC(struct RoboAI *ai);
+inline int ssmTransD(struct RoboAI *ai);
+inline int ssmTransE(struct RoboAI *ai, double *qx, double *qy);
+inline int ssmTransF(struct RoboAI *ai, double *qx, double *qy);
+inline int ssmTransG(struct RoboAI *ai, double *rx, double *ry);
+inline int ssmTransH(struct RoboAI *ai, double *rx, double *ry);
+inline int ssmTransI(struct RoboAI *ai);
+inline int ssmTransJ(struct RoboAI *ai);
+inline int ssmTransK(struct RoboAI *ai);
+inline int ssmTransL(struct RoboAI *ai, double *qx, double *qy);
+inline int ssmTransM(struct RoboAI *ai, double *rx, double *ry);
+
+void moveInDirection(struct RoboAI *ai, double x, double y, int pivot, int minSpeed);
+void moveAndKick(int speed);
+int hasClearPath(int size, double gx, double gy, double ox, double oy, double bx, double by);
+int attackMode(struct RoboAI *ai);
+int pointObstructed(struct RoboAI *ai, int size, double px, double py);
+void findQ(struct RoboAI *ai, double *qx, double *qy, int backoffDist);
+int obstAvoid(double *rx, double *ry, double gx, double gy, double ox, double oy, double bx, double by, int size);
+void findDefendPoint(struct RoboAI *ai, double *rx, double *ry, int size, int backoffDist);
 
 #endif
