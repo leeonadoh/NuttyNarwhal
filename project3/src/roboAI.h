@@ -54,7 +54,7 @@ struct AI_data{
 	int mv_fr;		// moving forward while turning right
 
 	// Object ID status for self, opponent, and ball. Just boolean 
-        // values indicating whether blobs have been found for each of these
+  // values indicating whether blobs have been found for each of these
 	// entities.
 	int selfID;
 	int oppID;
@@ -69,17 +69,18 @@ struct AI_data{
 	int satisfactionCount; // Used to determine whether the ball is truly in motion.
 
 	// Self track data. Done separately each frame
-        struct blob *self;		// Current self blob
+  struct blob *self;		// Current self blob
 	double old_scx, old_scy;	// Previous self (cx,cy)
 	double svx,svy;			// Current self [vx vy]
 	double smx,smy;			// Self heading
+  double sdx,sdy;     // Self direction vector.
 	// The below two added variables help with detecting the actual direction vector,
 	// since the one provided in the blobs always point right.
 	double old_sdx, old_sdy; // Stores previous direction vector.
 	int direction_Toggle; // Used to detect when the direction vector flips over.
 
 	// Opponent track data. Done separately each frame
-        struct blob *opp;		// Current opponent blob
+  struct blob *opp;		// Current opponent blob
 	double old_ocx, old_ocy;	// Previous opponent (cx,cy)
 	double ovx,ovy;			// Current opponent [vx vy]
 	double omx,omy;			// Opponent heading

@@ -328,9 +328,12 @@ void id_bot(struct RoboAI *ai, struct blob *blobs)
  static double stepID=0;
  double frame_inc=1.0/5.0;
 
-// TODO: MODIFIED
- drive_speed(-30);			// Start forward motion to establish heading
-					// Will move for a few frames.
+  // TODO: MODIFIED
+  drive_speed(-30);			// Start forward motion to establish heading
+  // Reset motion flags.
+  clear_motion_flags(ai);
+  ai->st.mv_fwd = 1;
+  // Will move for a few frames.
 
  track_agents(ai,blobs);		// Call the tracking function to find each agent
 
@@ -347,6 +350,8 @@ void id_bot(struct RoboAI *ai, struct blob *blobs)
   ai->st.state+=1;
   stepID=0;
   all_stop();
+  // Reset motion flags.
+  clear_motion_flags(ai);
  }
  else if (stepID>=1) stepID=0;
 
@@ -488,11 +493,12 @@ void AI_main(struct RoboAI *ai, struct blob *blobs, void *state)
    clear_motion_flags(ai);
    fprintf(stderr,"Self-ID complete. Current position: (%f,%f), current heading: [%f, %f], AI state=%d\n",ai->st.self->cx,ai->st.self->cy,ai->st.self->mx,ai->st.self->my,ai->st.state);
   }
-  if (ai->st.side == 1){
-    ai->st.direction_Toggle = -1;
-  } else {
-    ai->st.direction_Toggle = 1;
-  }
+  // This shouldn't be needed anymore since this is calculated at bottom of loop.
+  // if (ai->st.side == 1){
+  //   ai->st.direction_Toggle = -1;
+  // } else {
+  //   ai->st.direction_Toggle = 1;
+  // }
  }
  // else
  // {
@@ -527,9 +533,30 @@ void AI_main(struct RoboAI *ai, struct blob *blobs, void *state)
   }
   printf("Current state: %d | Direction Toggle: %d\n", ai->st.state, ai->st.direction_Toggle);
   //printf("%f\n", ai->st.self->dy*ai->st.self->dy + ai->st.self->dx*ai->st.self->dx);
-  track_agents(ai,blobs);   // Currently, does nothing but endlessly track
-  if (acos(ai->st.self->dy*ai->st.old_sdy + ai->st.self->dx*ai->st.old_sdx) > 2.5){
-    ai->st.direction_Toggle = ai->st.direction_Toggle * -1;
+
+  track_agents(ai,blobs);
+
+  // Find the most "correct" direction vector
+  // If magnitude of velocity is greater than 10, and our motors are fired, 
+  // use heading vector. This is to prevent bad heading vectors when we get nudged by opponent.
+  // This should also fix bad direction_toggle values once the robot starts to move forward. 
+  if (ai->st.svx*ai->st.svx + ai->st.svy*ai->st.svy > 100 && (ai->st.mv_fwd || ai->st.mv_back)){
+    ai->st.sdx = (ai->st.mv_back ? -1 : 1) * ai->st.smx;
+    ai->st.sdy = (ai->st.mv_back ? -1 : 1) * ai->st.smy;
+    // Adjust self blob direction_toggle according to valid heading. 
+    ai->st.direction_toggle = (ai->st.sdx >= 0 ? 1 : -1);
+  } else { // Else use blob's direction vector. 
+    // Adjust self blob direction_toggle if it jumps sporadically
+    // This occurs when the robot rotates over the -90 or 90 degrees mark, where
+    // 0 degrees is the positive x direction.
+    // This is unreliable, so hopefully the above will the direction vector back to
+    // reality once triggered. 
+    if (acos(ai->st.self->dy*ai->st.old_sdy + ai->st.self->dx*ai->st.old_sdx) > 2.5){
+      ai->st.direction_Toggle = ai->st.direction_Toggle * -1;
+    }
+    // Flip blob's direction vector by direction toggle.
+    ai->st.sdx = ai->st.direction_Toggle * ai->st.self->dx;
+    ai->st.sdy = ai->st.direction_Toggle * ai->st.self->dy;
   }
   ai->st.old_sdx = ai->st.self->dx;
   ai->st.old_sdy = ai->st.self->dy;
@@ -592,6 +619,9 @@ void chaseBallSM(struct RoboAI *ai){
       // If ball reveals, continue playing. 
       stop_kicker();
       reverse_speed(-30);
+      // Reset motion flags.
+      clear_motion_flags(ai)
+      ai->st.mv_back = 1;
 
       if (ai->st.ballID) {
         ai->st.state = 201;
@@ -604,6 +634,7 @@ void chaseBallSM(struct RoboAI *ai){
     case 204: //finish
       all_stop();
       stop_kicker();
+      clear_motion_flags(ai);
       printf("Chase ball state machine done.");
     break;
   }
@@ -634,6 +665,7 @@ void penaltySM(struct RoboAI *ai){
       moveInDirection(ai, qx, qy, 0, 30);
       if (fabs(ai->st.old_scy-qy) < CLOSE_DIST_MORE){
         all_stop();
+        clear_motion_flags(ai);
         ai->st.state = 102;
       }
       // printf("101 Q: %f, %f | B: %f, %f | S: %f, %f\n", qx, qy, ai->st.old_bcx, ai->st.old_bcy, ai->st.old_scx, ai->st.old_scy);
@@ -671,6 +703,7 @@ void penaltySM(struct RoboAI *ai){
     case 104: // Finished
       stop_kicker();
       all_stop();
+      clear_motion_flags(ai);
       fprintf(stderr, "Penalty state machine done.\n");
     break;
   }
@@ -746,10 +779,14 @@ void soccerSM(struct RoboAI *ai){
     case 98: // Ball missing
       stop_kicker();
       reverse_speed(-30);
+      // Reset motion flags.
+      clear_motion_flags(ai);
+      ai->st.mv_back = 1;
     break;
     case 99: 
       stop_kicker();
       all_stop();
+      clear_motion_flags(ai);
       printf("Soccer finished");
     break;
   }
@@ -969,18 +1006,22 @@ inline int ssmTransM(struct RoboAI *ai, double *rx, double *ry){
 // Will continue moving until state machine transitions out. 
 void moveInDirection(struct RoboAI *ai, double x, double y, int pivot, int minSpeed){
   // Check orientation.
-  // Find vector from bot to ball.
+  // Find vector from bot to point.
   double dx = x - ai->st.old_scx;
   double dy = y - ai->st.old_scy;
   double dMag = dx*dx + dy*dy;
   int actualSpeed = minSpeed;
+
+  // Reset motion flags.
+  clear_motion_flags(ai);
 
   actualSpeed = minSpeed + (10 * (dMag / (SD*SD)));
   actualSpeed = actualSpeed > 100 ? 100 : actualSpeed;
 
   // The angles of both vectors.
   double _dtheta = atan2(dy, dx);
-  double _stheta = atan2(ai->st.direction_Toggle*ai->st.self->dy, ai->st.direction_Toggle*ai->st.self->dx);
+  // double _stheta = atan2(ai->st.direction_Toggle*ai->st.self->dy, ai->st.direction_Toggle*ai->st.self->dx);
+  double _stheta = atan2(ai->st.sdy, ai->st.sdx); // Use custom "corrected" heading.
   // Normalize angles to 0, 2PI
   _dtheta = (_dtheta < 0) ? _dtheta + 2*M_PI : _dtheta;
   _stheta = (_stheta < 0) ? _stheta + 2*M_PI : _stheta;
@@ -996,6 +1037,8 @@ void moveInDirection(struct RoboAI *ai, double x, double y, int pivot, int minSp
   //printf("Angle: %f, toggle: %d, rSpeed: %d\n", angle, ai->st.direction_Toggle, rotSpeed);
   if (fabs(angle) <= 7){
     drive_speed(-actualSpeed);
+    ai->st.mv_fwd = actualSpeed > 0;
+    ai->st.mv_back = actualSpeed < 0;
   }
   else if (pivot){
     if (angle < 0){
@@ -1004,11 +1047,27 @@ void moveInDirection(struct RoboAI *ai, double x, double y, int pivot, int minSp
       pivot_right_speed(-actualSpeed * 3/4);
     }
   } else {
+    int lSpeed, rSpeed;
     if (fabs(angle) <= 45){
-      drive_custom(-(actualSpeed + rotSpeed), -(actualSpeed - rotSpeed));// TODO: Flip sign when controls are fixed.
+      lSpeed = actualSpeed + rotSpeed;
+      rSpeed = actualSpeed - rotSpeed;
     } else {
-      drive_custom(-rotSpeed, rotSpeed); // TODO: Flip sign when controls are fixed.
+      lSpeed = rotSpeed;
+      rSpeed = -rotSpeed;
     }
+    // Only set motion flags if both motors are moving in same direction,
+    // and are not zero in speed. 
+    if (lSpeed > 0 && rSpeed > 0){
+      ai->st.mv_fwd = 1;
+      ai->st.mv_fl = lSpeed < rSpeed; // r wheel faster than l wheel -> l turn.
+      ai->st.mv_fr = rSpeed < lSpeed; // l wheel faster than r wheel -> r turn.
+    } else if (lSpeed < 0 && rSpeed < 0){
+      // Note negative speed -> faster in this case.
+      ai->st.mv_back = 1;
+      ai->st.mv_bl = rSpeed < lSpeed; // r wheel faster than l wheel -> butt swings left.
+      ai->st.mv_br = lSpeed < rSpeed; // l wheel faster than r wheel -> butt swings right.
+    }
+    drive_custom(-lSpeed, -rSpeed);// TODO: Flip sign when controls are fixed.
   }
   //printf("Move completed\n");
 }
@@ -1018,6 +1077,9 @@ void moveAndKick(int speed){
   // IDEA: Make kicker toggle between on and off on each iteration. 
   retract();
   drive_speed(-speed);
+  // Reset motion flags.
+  clear_motion_flags(ai);
+  ai->st.mv_fwd = 1;
 }
 
 /**
