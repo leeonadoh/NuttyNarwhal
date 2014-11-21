@@ -38,12 +38,12 @@
 #define CAM_HEIGHT 768
 #define CAM_WIDTH 1024
 
-#define SD 160 // Unit of distance, where each distance of SD implies a change in movement speed.
+#define SD 140 // Unit of distance, where each distance of SD implies a change in movement speed.
 #define OP_RADIUS 120
 #define Q_DIST 120 //130
 #define R_DIST 150
-#define CLOSE_DIST 80 //100
-#define CLOSE_DIST_MORE 30 //50
+#define CLOSE_DIST 70 //100
+#define CLOSE_DIST_MORE 25 //50
 #define BALL_SPEED_THRES 200
 #define ANG_THRES 5
 #define KICK_VERIF_COUNT 3
