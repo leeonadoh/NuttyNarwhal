@@ -157,7 +157,7 @@ inline int ssmTransL(struct RoboAI *ai, double *qx, double *qy);
 inline int ssmTransM(struct RoboAI *ai, double *rx, double *ry);
 
 void moveInDirection(struct RoboAI *ai, double x, double y, int pivot, int minSpeed);
-void moveAndKick(int speed);
+void moveAndKick(struct RoboAI *ai, int speed);
 int hasClearPath(int size, double gx, double gy, double ox, double oy, double bx, double by);
 int attackMode(struct RoboAI *ai);
 int pointObstructed(struct RoboAI *ai, int size, double px, double py);
