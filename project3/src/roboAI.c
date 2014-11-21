@@ -915,7 +915,7 @@ inline void soccerSMTrans(struct RoboAI *ai, double *Rx, double *Ry, double *qx,
     case 9: // Defend, move to Q.
       if (!ai->st.selfID) ai->st.state = 99;
       else if (!ai->st.ballID || !ai->st.oppID) ai->st.state = 98;
-      else if (ssmTransM(ai, Rx, Ry)) ai->st.state = 11;
+      else if (ssmTransL(ai, Rx, Ry)) ai->st.state = 11;
       else if (ssmTransD(ai)) ai->st.state = 1;
       else if (ssmTransE(ai, qx, qy)) ai->st.state = 2;
       else if (ssmTransF(ai, qx, qy)) ai->st.state = 3;
