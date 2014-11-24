@@ -857,7 +857,7 @@ inline void soccerSMTrans(struct RoboAI *ai, double *Rx, double *Ry, double *qx,
       else if (ssmTransE(ai, qx, qy)) ai->st.state = 2;
       else if (ssmTransF(ai, qx, qy)) ai->st.state = 3;
       else if (ssmTransG(ai, Rx, Ry)) ai->st.state = 7;
-      else if (ssmTransI(ai)) ai->st.state = 9;
+      else if (ssmTransI(ai, qx, qy)) ai->st.state = 9;
       else if (ssmTransH(ai, Rx, Ry)) ai->st.state = 8;
     break;
     case 1: // Attack, avoid opponent.
@@ -867,7 +867,7 @@ inline void soccerSMTrans(struct RoboAI *ai, double *Rx, double *Ry, double *qx,
       else if (ssmTransE(ai, qx, qy)) ai->st.state = 2;
       else if (ssmTransF(ai, qx, qy)) ai->st.state = 3;
       else if (ssmTransG(ai, Rx, Ry)) ai->st.state = 7;
-      else if (ssmTransI(ai)) ai->st.state = 9;
+      else if (ssmTransI(ai, qx, qy)) ai->st.state = 9;
       else if (ssmTransH(ai, Rx, Ry)) ai->st.state = 8;
     break;
     case 2: // Attack, chase the ball.
@@ -878,7 +878,7 @@ inline void soccerSMTrans(struct RoboAI *ai, double *Rx, double *Ry, double *qx,
       else if (ssmTransE(ai, qx, qy)) ai->st.state = 2;
       else if (ssmTransF(ai, qx, qy)) ai->st.state = 3;
       else if (ssmTransG(ai, Rx, Ry)) ai->st.state = 7;
-      else if (ssmTransI(ai)) ai->st.state = 9;
+      else if (ssmTransI(ai, qx, qy)) ai->st.state = 9;
       else if (ssmTransH(ai, Rx, Ry)) ai->st.state = 8;
     break;
     case 3: // Attack, prepare to shoot.
@@ -889,7 +889,7 @@ inline void soccerSMTrans(struct RoboAI *ai, double *Rx, double *Ry, double *qx,
       else if (ssmTransE(ai, qx, qy)) ai->st.state = 2;
       else if (ssmTransF(ai, qx, qy)) ai->st.state = 3;
       else if (ssmTransG(ai, Rx, Ry)) ai->st.state = 7;
-      else if (ssmTransI(ai)) ai->st.state = 9;
+      else if (ssmTransI(ai, qx, qy)) ai->st.state = 9;
       else if (ssmTransH(ai, Rx, Ry)) ai->st.state = 8;
     break;
     case 4: // Attack, chase ball kick
@@ -916,7 +916,7 @@ inline void soccerSMTrans(struct RoboAI *ai, double *Rx, double *Ry, double *qx,
       else if (ssmTransE(ai, qx, qy)) ai->st.state = 2;
       else if (ssmTransF(ai, qx, qy)) ai->st.state = 3;
       else if (ssmTransG(ai, Rx, Ry)) ai->st.state = 7;
-      else if (ssmTransI(ai)) ai->st.state = 9;
+      else if (ssmTransI(ai, qx, qy)) ai->st.state = 9;
       else if (ssmTransH(ai, Rx, Ry)) ai->st.state = 8;
     break;
     case 8: // Defend, move to R.
@@ -928,7 +928,7 @@ inline void soccerSMTrans(struct RoboAI *ai, double *Rx, double *Ry, double *qx,
       else if (ssmTransE(ai, qx, qy)) ai->st.state = 2;
       else if (ssmTransF(ai, qx, qy)) ai->st.state = 3;
       else if (ssmTransG(ai, Rx, Ry)) ai->st.state = 7;
-      else if (ssmTransI(ai)) ai->st.state = 9;
+      else if (ssmTransI(ai, qx, qy)) ai->st.state = 9;
     break;
     case 9: // Defend, move to Q.
       if (!ai->st.selfID) ai->st.state = 99;
@@ -939,7 +939,7 @@ inline void soccerSMTrans(struct RoboAI *ai, double *Rx, double *Ry, double *qx,
       else if (ssmTransF(ai, qx, qy)) ai->st.state = 3;
       else if (ssmTransG(ai, Rx, Ry)) ai->st.state = 7;
       else if (ssmTransH(ai, Rx, Ry)) ai->st.state = 8;
-      else if (ssmTransI(ai)) ai->st.state = 9;
+      else if (ssmTransI(ai, qx, qy)) ai->st.state = 9;
     break;
     case 10: // Defend, block ball kick
       if (!ai->st.selfID) ai->st.state = 99;
@@ -1011,13 +1011,14 @@ inline int ssmTransH(struct RoboAI *ai, double *rx, double *ry){
       ai->st.old_bcx, ai->st.old_bcy);
 }
 
-// if defending and the ball's path to the enemy goal is unobstructed.
-inline int ssmTransI(struct RoboAI *ai){
+// if defending and the ball's path to the enemy goal is unobstructed,
+// and the point to kick it from is unobstructed.
+inline int ssmTransI(struct RoboAI *ai, double *qx, double *qy){
   return !attackMode(ai) && 
     hasClearPath(OP_RADIUS, 
       (ai->st.side ? 0 : CAM_WIDTH), CAM_HEIGHT / 2, 
       ai->st.old_ocx, ai->st.old_ocy,
-      ai->st.old_bcx, ai->st.old_bcy);
+      ai->st.old_bcx, ai->st.old_bcy) && !pointObstructed(ai, CLOSE_DIST_MORE, *qx, *qy);
 }
 
 // If the ball is within a set radius of the bot

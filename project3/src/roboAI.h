@@ -150,7 +150,7 @@ inline int ssmTransE(struct RoboAI *ai, double *qx, double *qy);
 inline int ssmTransF(struct RoboAI *ai, double *qx, double *qy);
 inline int ssmTransG(struct RoboAI *ai, double *rx, double *ry);
 inline int ssmTransH(struct RoboAI *ai, double *rx, double *ry);
-inline int ssmTransI(struct RoboAI *ai);
+inline int ssmTransI(struct RoboAI *ai, double *qx, double *qy);
 inline int ssmTransJ(struct RoboAI *ai);
 inline int ssmTransK(struct RoboAI *ai);
 inline int ssmTransL(struct RoboAI *ai, double *qx, double *qy);
