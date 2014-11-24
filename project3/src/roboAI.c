@@ -306,8 +306,8 @@ void track_agents(struct RoboAI *ai, struct blob *blobs)
   ////////////////////////////////////
   svBuffer += (ai->st.svx*ai->st.svx + ai->st.svy*ai->st.svy) - (prevSVX*prevSVX + prevSVY*prevSVY);
   if (svBuffer < -100) svBuffer = -100;
-  else if (svBUffer > 100) svBuffer = 100;
-  int svxFipped = prevSVX * ai->st.svx < 0
+  else if (svBuffer > 100) svBuffer = 100;
+  int svxFipped = prevSVX * ai->st.svx < 0;
   // Find the most "correct" direction vector
   // If magnitude of velocity is greater than 10, and our motors are fired, 
   // use heading vector. This is to prevent bad heading vectors when we get nudged by opponent.
