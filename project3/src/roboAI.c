@@ -163,11 +163,12 @@ void track_agents(struct RoboAI *ai, struct blob *blobs)
  // This function receives a pointer to the robot's AI data structure,
  // and a list of blobs.
  /////////////////////////////////////////////////////////////////////////
- static double prevSVX; // CUSTOM VARIABLE.
  static int prevMvFwd; // CUSTOM VARIABLE.
  static int waiting = 0; // CUSTOM VARIABLE.
  static int numInIf = 0;
  static int numWaited = 0;
+ static double prevSVX, prevSVY; // CUSTOM VARIABLE.
+ static double svBuffer = 0;
  struct blob *p;
  double mg,vx,vy,pink,doff,dmin,dmax,adj;
  double NOISE_VAR=5;
@@ -303,38 +304,22 @@ void track_agents(struct RoboAI *ai, struct blob *blobs)
   ////////////////////////////////////
   //////// CUSTOM CODE HERE ////////
   ////////////////////////////////////
+  svBuffer += (ai->st.svx*ai->st.svx + ai->st.svy*ai->st.svy) - (prevSVX*prevSVX + prevSVY*prevSVY);
+  if (svBuffer < -100) svBuffer = -100;
+  else if (svBUffer > 100) svBuffer = 100;
+  int svxFipped = prevSVX * ai->st.svx < 0
   // Find the most "correct" direction vector
   // If magnitude of velocity is greater than 10, and our motors are fired, 
   // use heading vector. This is to prevent bad heading vectors when we get nudged by opponent.
   // This should also fix bad direction_Toggle values once the robot starts to move forward. 
   if ((ai->st.mv_fwd || ai->st.mv_back) && ai->st.svx*ai->st.svx + ai->st.svy*ai->st.svy > 25){
-    double vMag = sqrt(ai->st.svy*ai->st.svy + ai->st.svx*ai->st.svx);
     // Adjust self blob direction_Toggle according to valid heading. 
-
     // Problem: When move flag changes from forward to backwards (or vice versa), velocity takes
     // a few frames to change to its negative counterpart. 
-    // Fix by keeping toggle the same until velocity reaches its negative counterpart. 
+    // Fix by keeping toggle the same until velocity reaches its negative counterpart.  
 
-    if (numInIf == 0) prevMvFwd = ai->st.mv_fwd;
-
-    if (waiting && prevMvFwd != ai->st.mv_fwd){
-      // case: we are already waiting, but the movement flag switches to what it was before.
-      waiting = 0;
-    } else if (prevMvFwd != ai->st.mv_fwd){
-      // case: not waiting, but movement flag switches.
-      waiting = 1;
-    }
-    if (waiting && prevSVX * ai->st.svx < 0){
-      // case: waiting, and velocity has flipped over to its correct sign.
-      waiting = 0;
-    }
-    if (!waiting || numWaited > 4) {
-      // case: not waiting, simply set direction toggle to direction of header, with regards to
-      // whether or not we're moving forward. 
-      ai->st.direction_Toggle = ((ai->st.mv_fwd ? 1 : -1) * ai->st.svx/vMag >= 0 ? 1 : -1);
-    } else {
-      numWaited ++;
-    }
+    
+    ai->st.direction_Toggle = ((ai->st.mv_fwd ? 1 : -1) * ai->st.svx >= 0 ? 1 : -1);
     numInIf ++;
   } else { // Else use blob's direction vector. 
     waiting = 0;
@@ -354,6 +339,7 @@ void track_agents(struct RoboAI *ai, struct blob *blobs)
   ai->st.sdy = ai->st.direction_Toggle * ai->st.self->dy;
   ai->st.old_sdx = ai->st.self->dx;
   ai->st.old_sdy = ai->st.self->dy;
+
 
   // Update static values.
   prevSVX = ai->st.svx;
@@ -1114,6 +1100,8 @@ void moveInDirection(struct RoboAI *ai, double x, double y, int pivot, int minSp
     if (fabs(angle) <= 35){
       lSpeed = actualSpeed + rotSpeed;
       rSpeed = actualSpeed - rotSpeed;
+      if (lSpeed < 0 && rSpeed < 0) ai->st.mv_back = 1;
+      else if (lSpeed > 0 && rSpeed > 0) ai->st.mv_fwd = 1;
     } else {
       lSpeed = rotSpeed;
       rSpeed = -rotSpeed;
@@ -1121,19 +1109,19 @@ void moveInDirection(struct RoboAI *ai, double x, double y, int pivot, int minSp
 
     // Only set motion flags if both motors are moving in same direction,
     // and are not zero in speed. 
-    if (fabs(lSpeed - rSpeed) < 10){ // If difference in left wheel and right wheel is less than 7
-      if (lSpeed < 0 && rSpeed < 0) ai->st.mv_back = 1;
-      else if (lSpeed > 0 && rSpeed > 0) ai->st.mv_fwd = 1;
-    } else {
-      if (lSpeed > 0 && rSpeed > 0){
-        ai->st.mv_fl = lSpeed < rSpeed; // r wheel faster than l wheel -> l turn.
-        ai->st.mv_fr = rSpeed < lSpeed; // l wheel faster than r wheel -> r turn.
-      } else if (lSpeed < 0 && rSpeed < 0){
-        // Note negative speed -> faster in this case.
-        ai->st.mv_bl = rSpeed < lSpeed; // r wheel faster than l wheel -> butt swings left.
-        ai->st.mv_br = lSpeed < rSpeed; // l wheel faster than r wheel -> butt swings right.
-      }
-    }
+    // if (fabs(lSpeed - rSpeed) < 10){ // If difference in left wheel and right wheel is less than 7
+    //   if (lSpeed < 0 && rSpeed < 0) ai->st.mv_back = 1;
+    //   else if (lSpeed > 0 && rSpeed > 0) ai->st.mv_fwd = 1;
+    // } else {
+    //   if (lSpeed > 0 && rSpeed > 0){
+    //     ai->st.mv_fl = lSpeed < rSpeed; // r wheel faster than l wheel -> l turn.
+    //     ai->st.mv_fr = rSpeed < lSpeed; // l wheel faster than r wheel -> r turn.
+    //   } else if (lSpeed < 0 && rSpeed < 0){
+    //     // Note negative speed -> faster in this case.
+    //     ai->st.mv_bl = rSpeed < lSpeed; // r wheel faster than l wheel -> butt swings left.
+    //     ai->st.mv_br = lSpeed < rSpeed; // l wheel faster than r wheel -> butt swings right.
+    //   }
+    // }
     drive_custom(-lSpeed, -rSpeed);// TODO: Flip sign when controls are fixed.
   }
   //printf("Move completed\n");
