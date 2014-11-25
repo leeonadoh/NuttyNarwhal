@@ -34,15 +34,23 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+// MODIFY CONSTANTS HERE WHEN NESSESARY
+#define OP_LEN 15 // in CM
+
 // Field size: 6 x 5 Leo's feet.
 #define CAM_HEIGHT 768
 #define CAM_WIDTH 1024
 
+#define SELF_LEN 27.5 // in CM
+#define PX_PER_CM CAM_WIDTH/183.0 // Calculate number of pixels per cm horizontally
+#define OP_RADIUS OP_LEN/2*PX_PER_CM + SELF_LEN/2*PX_PER_CM
+
+
 #define SD 140 // Unit of distance, where each distance of SD implies a change in movement speed.
-#define OP_RADIUS 120
+#define BALL_RADIUS 90 // Distance to swerve around the ball in order to kick backwards
 #define Q_DIST 120 //130
 #define R_DIST 150
-#define CLOSE_DIST 70 //100
+#define CLOSE_DIST 75 //100
 #define CLOSE_DIST_MORE 25 //50
 #define BALL_SPEED_THRES 200
 #define ANG_THRES 5
@@ -163,42 +171,44 @@ void track_agents(struct RoboAI *ai, struct blob *blobs)
  // This function receives a pointer to the robot's AI data structure,
  // and a list of blobs.
  /////////////////////////////////////////////////////////////////////////
- static double prevSVX; // CUSTOM VARIABLE.
- static int prevMvFwd; // CUSTOM VARIABLE.
- static int waiting = 0; // CUSTOM VARIABLE.
- static int numInIf = 0;
- static int numWaited = 0;
  struct blob *p;
  double mg,vx,vy,pink,doff,dmin,dmax,adj;
  double NOISE_VAR=5;
+
+  /////////////////
+  // CUSTOM CODE //
+  /////////////////
+  // Set variables that keep track of previous values.
+  ai->st.old_mv_fwd = ai->st.mv_fwd;
+  ai->st.old_mv_back = ai->st.mv_back;
 
  // Reset ID flags
  ai->st.ballID=0;
  ai->st.selfID=0;
  ai->st.oppID=0;
- ai->st.ball=NULL;			// Be sure you check these are not NULL before
- ai->st.self=NULL;			// trying to access data for the ball/self/opponent!
+ ai->st.ball=NULL;      // Be sure you check these are not NULL before
+ ai->st.self=NULL;      // trying to access data for the ball/self/opponent!
  ai->st.opp=NULL;
 
  // Find the ball
  p=id_coloured_blob(ai,blobs,2);
  if (p)
  {
-  ai->st.ball=p;			// New pointer to ball
-  ai->st.ballID=1;			// Set ID flag for ball (we found it!)
-  ai->st.bvx=p->cx-ai->st.old_bcx;	// Update ball velocity in ai structure and blob structure
+  ai->st.ball=p;      // New pointer to ball
+  ai->st.ballID=1;      // Set ID flag for ball (we found it!)
+  ai->st.bvx=p->cx-ai->st.old_bcx;  // Update ball velocity in ai structure and blob structure
   ai->st.bvy=p->cy-ai->st.old_bcy;
   ai->st.ball->vx=ai->st.bvx;
   ai->st.ball->vy=ai->st.bvy;
 
-  ai->st.old_bcx=p->cx; 		// Update old position for next frame's computation
+  ai->st.old_bcx=p->cx;     // Update old position for next frame's computation
   ai->st.old_bcy=p->cy;
   ai->st.ball->idtype=3;
 
-  vx=ai->st.bvx;			// Compute heading direction (normalized motion vector)
+  vx=ai->st.bvx;      // Compute heading direction (normalized motion vector)
   vy=ai->st.bvy;
   mg=sqrt((vx*vx)+(vy*vy));
-  if (mg>NOISE_VAR)			// Update heading vector if meaningful motion detected
+  if (mg>NOISE_VAR)     // Update heading vector if meaningful motion detected
   {
    vx/=mg;
    vy/=mg;
@@ -217,7 +227,7 @@ void track_agents(struct RoboAI *ai, struct blob *blobs)
  else p=id_coloured_blob(ai,blobs,0);
  if (p)
  {
-  ai->st.self=p;			// Update pointer to self-blob
+  ai->st.self=p;      // Update pointer to self-blob
 
   // Adjust Y position if we have calibration data
   if (fabs(p->adj_Y[0][0])>.1)
@@ -262,7 +272,7 @@ void track_agents(struct RoboAI *ai, struct blob *blobs)
  else p=id_coloured_blob(ai,blobs,1);
  if (p)
  {
-  ai->st.opp=p;	
+  ai->st.opp=p; 
 
   if (fabs(p->adj_Y[0][1])>.1)
   {
@@ -304,60 +314,35 @@ void track_agents(struct RoboAI *ai, struct blob *blobs)
   //////// CUSTOM CODE HERE ////////
   ////////////////////////////////////
   // Find the most "correct" direction vector
-  // If magnitude of velocity is greater than 10, and our motors are fired, 
+  // If magnitude of velocity is greater than 5, and our motors are fired, 
   // use heading vector. This is to prevent bad heading vectors when we get nudged by opponent.
   // This should also fix bad direction_Toggle values once the robot starts to move forward. 
-  if ((ai->st.mv_fwd || ai->st.mv_back) && ai->st.svx*ai->st.svx + ai->st.svy*ai->st.svy > 25){
-    double vMag = sqrt(ai->st.svy*ai->st.svy + ai->st.svx*ai->st.svx);
-    // Adjust self blob direction_Toggle according to valid heading. 
 
-    // Problem: When move flag changes from forward to backwards (or vice versa), velocity takes
-    // a few frames to change to its negative counterpart. 
-    // Fix by keeping toggle the same until velocity reaches its negative counterpart. 
-
-    if (numInIf == 0) prevMvFwd = ai->st.mv_fwd;
-
-    if (waiting && prevMvFwd != ai->st.mv_fwd){
-      // case: we are already waiting, but the movement flag switches to what it was before.
-      waiting = 0;
-    } else if (prevMvFwd != ai->st.mv_fwd){
-      // case: not waiting, but movement flag switches.
-      waiting = 1;
+  if (ai->st.state != 999){
+    if ((ai->st.mv_fwd || ai->st.mv_back) && ai->st.svx*ai->st.svx + ai->st.svy*ai->st.svy > 25){
+      // Adjust self blob direction_Toggle according to valid heading. 
+      ai->st.direction_Toggle = ((ai->st.mv_fwd ? 1 : -1) * ai->st.svx >= 0 ? 1 : -1);
+    } else { // Else use blob's direction vector. 
+      // Adjust self blob direction_Toggle if it jumps sporadically
+      // This occurs when the robot rotates over the -90 or 90 degrees mark, where
+      // 0 degrees is the positive x direction.
+      // This is unreliable, so the above will hopefully update the direction vector back to
+      // reality once triggered. 
+      if (ai->st.self != NULL && acos(ai->st.self->dy*ai->st.old_sdy + ai->st.self->dx*ai->st.old_sdx) > 1.75){
+        ai->st.direction_Toggle = ai->st.direction_Toggle * -1;
+      }
     }
-    if (waiting && prevSVX * ai->st.svx < 0){
-      // case: waiting, and velocity has flipped over to its correct sign.
-      waiting = 0;
-    }
-    if (!waiting || numWaited > 4) {
-      // case: not waiting, simply set direction toggle to direction of header, with regards to
-      // whether or not we're moving forward. 
-      ai->st.direction_Toggle = ((ai->st.mv_fwd ? 1 : -1) * ai->st.svx/vMag >= 0 ? 1 : -1);
-    } else {
-      numWaited ++;
-    }
-    numInIf ++;
-  } else { // Else use blob's direction vector. 
-    waiting = 0;
-    numInIf = 0;
-    numWaited = 0;
-    // Adjust self blob direction_Toggle if it jumps sporadically
-    // This occurs when the robot rotates over the -90 or 90 degrees mark, where
-    // 0 degrees is the positive x direction.
-    // This is unreliable, so hopefully the above will the direction vector back to
-    // reality once triggered. 
-    if (acos(ai->st.self->dy*ai->st.old_sdy + ai->st.self->dx*ai->st.old_sdx) > 2){
-      ai->st.direction_Toggle = ai->st.direction_Toggle * -1;
-    }
-    // Flip blob's direction vector by direction toggle.
+    //printf("Toggle updated\n");
   }
-  ai->st.sdx = ai->st.direction_Toggle * ai->st.self->dx;
-  ai->st.sdy = ai->st.direction_Toggle * ai->st.self->dy;
-  ai->st.old_sdx = ai->st.self->dx;
-  ai->st.old_sdy = ai->st.self->dy;
-
-  // Update static values.
-  prevSVX = ai->st.svx;
-  prevMvFwd = ai->st.mv_fwd;
+  // Flip blob's direction vector by direction toggle.
+  if (ai->st.self != NULL){
+    ai->st.sdx = ai->st.direction_Toggle * ai->st.self->dx;
+    ai->st.sdy = ai->st.direction_Toggle * ai->st.self->dy;
+  }
+  if (ai->st.self != NULL){
+    ai->st.old_sdx = ai->st.self->dx;
+    ai->st.old_sdy = ai->st.self->dy;
+  }
   //printf("dx: %f dy: %f vx: %f vy: %f t: %d mF: %d mB %d W %d\n", ai->st.sdx, ai->st.sdy, ai->st.svx, ai->st.svy, ai->st.direction_Toggle, ai->st.mv_fwd, ai->st.mv_back, waiting);
 }
 
@@ -543,6 +528,8 @@ void AI_main(struct RoboAI *ai, struct blob *blobs, void *state)
 
   ** Do not change the behaviour of the robot ID routine **
  **************************************************************************/
+ static int stateBeforeHalt;
+
  if (ai->st.state % 100 != 0) track_agents(ai,blobs);
  //printf ("Self bot found: %d\n", ai->st.selfID);
  if (ai->st.state==0||ai->st.state==100||ai->st.state==200)   // Initial set up - find own, ball, and opponent blobs
@@ -593,8 +580,45 @@ void AI_main(struct RoboAI *ai, struct blob *blobs, void *state)
     // Chase ball state.
     chaseBallSM(ai);
   }
-  //printf("%f\n", ai->st.self->dy*ai->st.self->dy + ai->st.self->dx*ai->st.self->dx);
 
+  // If there is a change in mv_fwd or mv_back flags, enter halt state to stabilize velocity. 
+  if (ai->st.state != 999 && 
+      ( // We switch movement directions immediately (forward -> backwards or vice versa)
+        (ai->st.mv_fwd != ai->st.old_mv_fwd && ai->st.mv_back != ai->st.old_mv_back)
+        // || ( // Or we switch from rotating to moving forward/backwards, and current velocity has a big magnitude.
+        //   ((!ai->st.old_mv_fwd && !ai->st.old_mv_back) && (ai->st.mv_fwd || ai->st.mv_back)) &&
+        //   (ai->st.svx*ai->st.svx + ai->st.svy*ai->st.svy > 900)
+        // ) 
+      )
+    ){
+    // Then we go into halt state to reset velocity.
+    stateBeforeHalt = ai->st.state; // Save state before we entered halt.
+    ai->st.state = 999;
+  }
+  if (ai->st.state == 999){    
+    // All stop if state is 999.
+    // Exit when magnitude of velocity < 10
+    if (ai->st.svx*ai->st.svx + ai->st.svy*ai->st.svy < 49){
+      ai->st.state = stateBeforeHalt; // Revert to previous state.
+      // Execute state machines right after exiting 999.
+      if (ai->st.state/100 == 0){
+        soccerSM(ai);
+      }
+      else if (ai->st.state/100 == 1){
+        // Penalty kick state.
+        penaltySM(ai);
+      } 
+      else if (ai->st.state/100 == 2){
+        // Chase ball state.
+        chaseBallSM(ai);
+      }
+    } else {
+      all_stop(); // We don't modify motion flags here. 
+      // The purpose of this state is to allow velocities to reset. 
+    }
+  }
+  printf("OP_RADIUS: %f\n", OP_RADIUS);
+  printf("mf %d|mb %d|st %d|oSt %d|toggle %d|vx: %f|vy: %f\n", ai->st.mv_fwd, ai->st.mv_back, ai->st.state, stateBeforeHalt, ai->st.direction_Toggle, ai->st.svx, ai->st.svy);
 }
 
 
@@ -612,6 +636,7 @@ void AI_main(struct RoboAI *ai, struct blob *blobs, void *state)
  You will lose marks if AI_main() is cluttered with code that doesn't belong
  there.
 **********************************************************************************/
+
 
 // Chase ball state machine. If statements control transitions, 
 // while the rest of each case statement executes the state. 
@@ -732,7 +757,7 @@ void penaltySM(struct RoboAI *ai){
         ai->st.satisfactionCount = 0; // FIXED: Prevented early satisfactions from aborted kick attempts
         ai->st.state = 104;
       }
-      printf("Kick satisfied for: %d\n", ai->st.satisfactionCount);
+      // printf("Kick satisfied for: %d\n", ai->st.satisfactionCount);
       // Otherwise try kick again. Go to state 102
       // else {
       //   ai->st.state = 102;
@@ -748,7 +773,9 @@ void penaltySM(struct RoboAI *ai){
 }
 
 void soccerSM(struct RoboAI *ai){
-  double resultX, resultY, attackBackoffX, attackBackoffY, defendBackoffX, defendBackoffY;
+  double resultX, resultY, attackBackoffX, attackBackoffY, defendBackoffX, defendBackoffY, urgentX, urgentY;
+  double *tx = &urgentX;
+  double *ty = &urgentY;
   double *rx = &resultX;
   double *ry = &resultY;
   double *qx = &attackBackoffX;
@@ -769,27 +796,29 @@ void soccerSM(struct RoboAI *ai){
         ai->st.old_ocx, ai->st.old_ocy, 
         ai->st.old_scx, ai->st.old_scy, OP_RADIUS);
       moveInDirection(ai, *rx, *ry, 0, 35);
-      printf("r = (%f, %f) ", *rx, *ry);
+      //printf("r = (%f, %f) ", *rx, *ry);
     break;
     case 2: // Attack, chase the ball.
       stop_kicker();
       findQ(ai, qx, qy, Q_DIST);
       findDefendPoint(ai, Rx, Ry, OP_RADIUS, R_DIST);
-      moveInDirection(ai, ai->st.old_bcx, ai->st.old_bcy, 0, 30);
+      moveInDirection(ai, ai->st.old_bcx, ai->st.old_bcy, 0, 40);
     break;
     case 3: // Attack, prepare to shoot.
       stop_kicker();
       findQ(ai, qx, qy, Q_DIST);
       findDefendPoint(ai, Rx, Ry, OP_RADIUS, R_DIST);
-      moveInDirection(ai, *qx, *qy, 0, 30);
-      printf("Q = (%f, %f) ", *qx, *qy);
+      obstAvoid(rx, ry, *qx, *qy,
+        ai->st.old_bcx, ai->st.old_bcy,
+        ai->st.old_scx, ai->st.old_scy, BALL_RADIUS);
+      moveInDirection(ai, *rx, *ry, 0, 30);
     break;
     case 4: // Attack, chase ball kick
       moveAndKick(ai, 40);
     break;
     case 5: // Attack, shoot align
       stop_kicker();
-      moveInDirection(ai, ai->st.old_bcx, ai->st.old_bcy, 1, 20);
+      moveInDirection(ai, ai->st.old_bcx, ai->st.old_bcy, 1, 30);
     break;
     case 6: // Attacking shoot kick
       moveAndKick(ai, 40);
@@ -798,36 +827,53 @@ void soccerSM(struct RoboAI *ai){
       stop_kicker();
       findQ(ai, qx, qy, Q_DIST);
       findDefendPoint(ai, Rx, Ry, OP_RADIUS, R_DIST);
-      printf("R = (%f, %f) ", *Rx, *Ry);
       obstAvoid(rx, ry, *Rx, *Ry,
         ai->st.old_ocx, ai->st.old_ocy,
         ai->st.old_scx, ai->st.old_scy, OP_RADIUS);
-      moveInDirection(ai, *rx, *ry, 0, 35);
-      printf("r = (%f, %f) ", *rx, *ry);
+      moveInDirection(ai, *rx, *ry, 0, 50);
     break;
     case 8: // Defend, move to R.
       stop_kicker();
       findQ(ai, qx, qy, Q_DIST);
       findDefendPoint(ai, Rx, Ry, OP_RADIUS, R_DIST);
-      moveInDirection(ai, *Rx, *Ry, 0, 30);
-      printf("R = (%f, %f) ", *Rx, *Ry);
+      obstAvoid(rx, ry, *Rx, *Ry,
+        ai->st.old_bcx, ai->st.old_bcy,
+        ai->st.old_scx, ai->st.old_scy, BALL_RADIUS);
+      moveInDirection(ai, *rx, *ry, 0, 50);
     break;
     case 9: // Defend, move to Q.
       stop_kicker();
       findQ(ai, qx, qy, Q_DIST);
       findDefendPoint(ai, Rx, Ry, OP_RADIUS, R_DIST);
-      moveInDirection(ai, *qx, *qy, 0, 30);
-      printf("Q = (%f, %f) ", *qx, *qy);
+      obstAvoid(rx, ry, *qx, *qy,
+        ai->st.old_bcx, ai->st.old_bcy,
+        ai->st.old_scx, ai->st.old_scy, BALL_RADIUS);
+      moveInDirection(ai, *rx, *ry, 0, 30);
     break;
     case 10: // Defend, block ball kick
       moveAndKick(ai, 40);
     break;
     case 11: // Defend, counter-attack align.
       stop_kicker();
-      moveInDirection(ai, ai->st.old_bcx, ai->st.old_bcy, 1, 20);
+      moveInDirection(ai, ai->st.old_bcx, ai->st.old_bcy, 1, 30);
     break;
     case 12: // Defend, counter-attack kick.
       moveAndKick(ai, 40);
+    break;
+    case 13: // Emergency defense. Move between ball and self goal.
+      findQ(ai, qx, qy, Q_DIST);
+      findDefendPoint(ai, Rx, Ry, OP_RADIUS, R_DIST);
+      urgentX = (ai->st.old_bcx + (ai->st.side ? CAM_WIDTH : 0))/2;
+      urgentY = (ai->st.old_bcy + CAM_HEIGHT/2)/2;
+      if ((urgentX-ai->st.old_scx)*(urgentX-ai->st.old_scx)+(urgentY-ai->st.old_scy)*(urgentY-ai->st.old_scy) > CLOSE_DIST*CLOSE_DIST) {
+        obstAvoid(rx, ry, *tx, *ty,
+          ai->st.old_ocx, ai->st.old_ocy,
+          ai->st.old_scx, ai->st.old_scy, OP_RADIUS);
+        moveInDirection(ai, *rx, *ry, 0, 50);
+      } else {
+        all_stop();
+        clear_motion_flags(ai);
+      }
     break;
     case 98: // Ball missing
       stop_kicker();
@@ -853,6 +899,7 @@ inline void soccerSMTrans(struct RoboAI *ai, double *Rx, double *Ry, double *qx,
     case 0: // Choose mode.
       if (!ai->st.selfID) ai->st.state = 99;
       else if (!ai->st.ballID || !ai->st.oppID) ai->st.state = 98;
+      else if (ssmTransO(ai)) ai->st.state = 13;
       else if (ssmTransD(ai)) ai->st.state = 1;
       else if (ssmTransE(ai, qx, qy)) ai->st.state = 2;
       else if (ssmTransF(ai, qx, qy)) ai->st.state = 3;
@@ -863,6 +910,7 @@ inline void soccerSMTrans(struct RoboAI *ai, double *Rx, double *Ry, double *qx,
     case 1: // Attack, avoid opponent.
       if (!ai->st.selfID) ai->st.state = 99;
       else if (!ai->st.ballID || !ai->st.oppID) ai->st.state = 98;
+      else if (ssmTransO(ai)) ai->st.state = 13;
       else if (ssmTransD(ai)) ai->st.state = 1;
       else if (ssmTransE(ai, qx, qy)) ai->st.state = 2;
       else if (ssmTransF(ai, qx, qy)) ai->st.state = 3;
@@ -873,6 +921,7 @@ inline void soccerSMTrans(struct RoboAI *ai, double *Rx, double *Ry, double *qx,
     case 2: // Attack, chase the ball.
       if (!ai->st.selfID) ai->st.state = 99;
       else if (!ai->st.ballID || !ai->st.oppID) ai->st.state = 98;
+      else if (ssmTransO(ai)) ai->st.state = 13;
       else if (ssmTransJ(ai)) ai->st.state = 4;
       else if (ssmTransD(ai)) ai->st.state = 1;
       else if (ssmTransE(ai, qx, qy)) ai->st.state = 2;
@@ -884,6 +933,7 @@ inline void soccerSMTrans(struct RoboAI *ai, double *Rx, double *Ry, double *qx,
     case 3: // Attack, prepare to shoot.
       if (!ai->st.selfID) ai->st.state = 99;
       else if (!ai->st.ballID || !ai->st.oppID) ai->st.state = 98;
+      else if (ssmTransO(ai)) ai->st.state = 13;
       else if (ssmTransL(ai, qx, qy)) ai->st.state = 5;
       else if (ssmTransD(ai)) ai->st.state = 1;
       else if (ssmTransE(ai, qx, qy)) ai->st.state = 2;
@@ -912,16 +962,18 @@ inline void soccerSMTrans(struct RoboAI *ai, double *Rx, double *Ry, double *qx,
     case 7: // Defend, avoid enemy.
       if (!ai->st.selfID) ai->st.state = 99;
       else if (!ai->st.ballID || !ai->st.oppID) ai->st.state = 98;
+      else if (ssmTransO(ai)) ai->st.state = 13;
       else if (ssmTransD(ai)) ai->st.state = 1;
       else if (ssmTransE(ai, qx, qy)) ai->st.state = 2;
       else if (ssmTransF(ai, qx, qy)) ai->st.state = 3;
+      else if (ssmTransH(ai, Rx, Ry)) ai->st.state = 8;
       else if (ssmTransG(ai, Rx, Ry)) ai->st.state = 7;
       else if (ssmTransI(ai, qx, qy)) ai->st.state = 9;
-      else if (ssmTransH(ai, Rx, Ry)) ai->st.state = 8;
     break;
     case 8: // Defend, move to R.
       if (!ai->st.selfID) ai->st.state = 99;
       else if (!ai->st.ballID || !ai->st.oppID) ai->st.state = 98;
+      else if (ssmTransO(ai)) ai->st.state = 13;
       else if (ssmTransM(ai, Rx, Ry)) ai->st.state = 11;
       else if (ssmTransJ(ai)) ai->st.state = 11;
       else if (ssmTransD(ai)) ai->st.state = 1;
@@ -933,6 +985,7 @@ inline void soccerSMTrans(struct RoboAI *ai, double *Rx, double *Ry, double *qx,
     case 9: // Defend, move to Q.
       if (!ai->st.selfID) ai->st.state = 99;
       else if (!ai->st.ballID || !ai->st.oppID) ai->st.state = 98;
+      else if (ssmTransO(ai)) ai->st.state = 13;
       else if (ssmTransL(ai, qx, qy)) ai->st.state = 11; // FIXED: Should use Q instead of R
       else if (ssmTransD(ai)) ai->st.state = 1;
       else if (ssmTransE(ai, qx, qy)) ai->st.state = 2;
@@ -959,10 +1012,24 @@ inline void soccerSMTrans(struct RoboAI *ai, double *Rx, double *Ry, double *qx,
       else if (ssmTransN(ai)) ai->st.state = 2; //FIXED: Kick failed
       else if (ssmTransK(ai)) ai->st.state = 9;
     break;
+    case 13: // Emergency defense. Move between ball and self goal.
+      if (!ai->st.selfID) ai->st.state = 99;
+      else if (!ai->st.ballID || !ai->st.oppID) ai->st.state = 98;
+      else if (ssmTransO(ai)) ai->st.state = 13;
+      else if (ssmTransD(ai)) ai->st.state = 1;
+      else if (ssmTransE(ai, qx, qy)) ai->st.state = 2;
+      else if (ssmTransF(ai, qx, qy)) ai->st.state = 3;
+      else if (ssmTransG(ai, Rx, Ry)) ai->st.state = 7;
+      else if (ssmTransI(ai, qx, qy)) ai->st.state = 9;
+      else if (ssmTransH(ai, Rx, Ry)) ai->st.state = 8;
+    break;
     case 98: // Ball missing
       if (!ai->st.selfID) ai->st.state = 99;
       else if (ai->st.ballID && ai->st.oppID) ai->st.state = 1;
       else if (ssmTransC(ai)) ai->st.state = 99;
+    break;
+    case 99: // Game "finished"
+      if (ai->st.selfID && ai->st.ballID && ai->st.oppID) ai->st.state = 1;
     break;
   }
 }
@@ -1004,6 +1071,11 @@ inline int ssmTransG(struct RoboAI *ai, double *rx, double *ry){
 // goal is obstructed.
 // FIXED: Prevented unwanted transitions into state 8
 inline int ssmTransH(struct RoboAI *ai, double *rx, double *ry){
+  printf("Rx: %f Ry: %f\n", *rx, *ry);
+  // printf("R Obstructed: %d clearPath: %d\n", pointObstructed(ai, OP_RADIUS, *rx, *ry), hasClearPath(OP_RADIUS, 
+  //     (ai->st.side ? 0 : CAM_WIDTH), CAM_HEIGHT / 2, 
+  //     ai->st.old_ocx, ai->st.old_ocy,
+  //     ai->st.old_bcx, ai->st.old_bcy));
   return !attackMode(ai) && !pointObstructed(ai, OP_RADIUS, *rx, *ry) &&
     !hasClearPath(OP_RADIUS, 
       (ai->st.side ? 0 : CAM_WIDTH), CAM_HEIGHT / 2, 
@@ -1065,6 +1137,11 @@ inline int ssmTransN(struct RoboAI *ai){
   return dx*dx + dy*dy > 4*CLOSE_DIST*CLOSE_DIST;
 }
 
+// If ball is obstructed by enemy. Transition into emergency defense.
+inline int ssmTransO(struct RoboAI *ai){
+  return pointObstructed(ai, OP_RADIUS, ai->st.old_bcx, ai->st.old_bcy);
+}
+
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1088,7 +1165,6 @@ void moveInDirection(struct RoboAI *ai, double x, double y, int pivot, int minSp
 
   // The angles of both vectors.
   double _dtheta = atan2(dy, dx);
-  // double _stheta = atan2(ai->st.direction_Toggle*ai->st.self->dy, ai->st.direction_Toggle*ai->st.self->dx);
   double _stheta = atan2(ai->st.sdy, ai->st.sdx); // Use custom "corrected" heading.
   // Normalize angles to 0, 2PI
   _dtheta = (_dtheta < 0) ? _dtheta + 2*M_PI : _dtheta;
@@ -1122,7 +1198,7 @@ void moveInDirection(struct RoboAI *ai, double x, double y, int pivot, int minSp
 
     // Only set motion flags if both motors are moving in same direction,
     // and are not zero in speed. 
-    if (fabs(lSpeed - rSpeed) < 10){ // If difference in left wheel and right wheel is less than 7
+    if (fabs(lSpeed - rSpeed) < 20){ // If difference in left wheel and right wheel is less than 7
       if (lSpeed < 0 && rSpeed < 0) ai->st.mv_back = 1;
       else if (lSpeed > 0 && rSpeed > 0) ai->st.mv_fwd = 1;
     } else {
@@ -1207,14 +1283,13 @@ int attackMode(struct RoboAI *ai){
 * Return whether point p is covered by opponent.
 */
 int pointObstructed(struct RoboAI *ai, int size, double px, double py){
-  // return true if opponent is within size distance of ball.
   if ((px <= 0 || px >= CAM_WIDTH) || (py <= 0 || py >= CAM_HEIGHT)){
-    printf("obstructed: 1");
     return 1;
   }
+  // return true if opponent is within size distance of ball.
   px = ai->st.old_ocx - px;
   py = ai->st.old_ocy - py;
-  printf ("obstructed: %d\n", px*px + py*py < size*size);
+  //printf ("obstructed: %d\n", px*px + py*py < size*size);
   return px*px + py*py < size*size;
   // TODO identify when ball is out of field?
 }
@@ -1296,7 +1371,7 @@ void findDefendPoint(struct RoboAI *ai, double *rx, double *ry, int size, int ba
     ai->st.old_bcx, ai->st.old_bcy, 
     size);
   double rMag = sqrt((*rx)*(*rx) + (*ry)*(*ry));
-  *rx = ai->st.old_bcx + backoffDist/rMag*(*rx);
-  *ry = ai->st.old_bcy + backoffDist/rMag*(*ry);
+  *rx = ai->st.old_bcx - backoffDist/rMag*(*rx);
+  *ry = ai->st.old_bcy - backoffDist/rMag*(*ry);
   //printf("rx: %f, ry: %f\n", *rx, *ry);
 }
