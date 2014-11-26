@@ -343,6 +343,9 @@ void track_agents(struct RoboAI *ai, struct blob *blobs)
     ai->st.old_sdx = ai->st.self->dx;
     ai->st.old_sdy = ai->st.self->dy;
   }
+  // Predict the ball's next position by adding velocity to previous position.
+  ai->st.bcx = ai->st.old_bcx + ai->st.bvx;
+  ai->st.bcy = ai->st.old_bcy + ai->st.bvy;
   //printf("dx: %f dy: %f vx: %f vy: %f t: %d mF: %d mB %d W %d\n", ai->st.sdx, ai->st.sdy, ai->st.svx, ai->st.svy, ai->st.direction_Toggle, ai->st.mv_fwd, ai->st.mv_back, waiting);
 }
 
@@ -802,14 +805,14 @@ void soccerSM(struct RoboAI *ai){
       stop_kicker();
       findQ(ai, qx, qy, Q_DIST);
       findDefendPoint(ai, Rx, Ry, OP_RADIUS, R_DIST);
-      moveInDirection(ai, ai->st.old_bcx, ai->st.old_bcy, 0, 40);
+      moveInDirection(ai, ai->st.bcx, ai->st.bcy, 0, 40);
     break;
     case 3: // Attack, prepare to shoot.
       stop_kicker();
       findQ(ai, qx, qy, Q_DIST);
       findDefendPoint(ai, Rx, Ry, OP_RADIUS, R_DIST);
       obstAvoid(rx, ry, *qx, *qy,
-        ai->st.old_bcx, ai->st.old_bcy,
+        ai->st.bcx, ai->st.bcy,
         ai->st.old_scx, ai->st.old_scy, BALL_RADIUS);
       moveInDirection(ai, *rx, *ry, 0, 35);
     break;
@@ -818,7 +821,7 @@ void soccerSM(struct RoboAI *ai){
     break;
     case 5: // Attack, shoot align
       stop_kicker();
-      moveInDirection(ai, ai->st.old_bcx, ai->st.old_bcy, 1, 35);
+      moveInDirection(ai, ai->st.bcx, ai->st.bcy, 1, 35);
     break;
     case 6: // Attacking shoot kick
       moveAndKick(ai, 50);
@@ -837,7 +840,7 @@ void soccerSM(struct RoboAI *ai){
       findQ(ai, qx, qy, Q_DIST);
       findDefendPoint(ai, Rx, Ry, OP_RADIUS, R_DIST);
       obstAvoid(rx, ry, *Rx, *Ry,
-        ai->st.old_bcx, ai->st.old_bcy,
+        ai->st.bcx, ai->st.bcy,
         ai->st.old_scx, ai->st.old_scy, BALL_RADIUS);
       moveInDirection(ai, *rx, *ry, 0, 50);
     break;
@@ -846,7 +849,7 @@ void soccerSM(struct RoboAI *ai){
       findQ(ai, qx, qy, Q_DIST);
       findDefendPoint(ai, Rx, Ry, OP_RADIUS, R_DIST);
       obstAvoid(rx, ry, *qx, *qy,
-        ai->st.old_bcx, ai->st.old_bcy,
+        ai->st.bcx, ai->st.bcy,
         ai->st.old_scx, ai->st.old_scy, BALL_RADIUS);
       moveInDirection(ai, *rx, *ry, 0, 35);
     break;
@@ -855,7 +858,7 @@ void soccerSM(struct RoboAI *ai){
     break;
     case 11: // Defend, counter-attack align.
       stop_kicker();
-      moveInDirection(ai, ai->st.old_bcx, ai->st.old_bcy, 1, 35);
+      moveInDirection(ai, ai->st.bcx, ai->st.bcy, 1, 35);
     break;
     case 12: // Defend, counter-attack kick.
       moveAndKick(ai, 50);
@@ -863,8 +866,8 @@ void soccerSM(struct RoboAI *ai){
     case 13: // Emergency defense. Move between ball and self goal.
       findQ(ai, qx, qy, Q_DIST);
       findDefendPoint(ai, Rx, Ry, OP_RADIUS, R_DIST);
-      urgentX = (ai->st.old_bcx + (ai->st.side ? CAM_WIDTH : 0))/2;
-      urgentY = (ai->st.old_bcy + CAM_HEIGHT/2)/2;
+      urgentX = (ai->st.bcx + (ai->st.side ? CAM_WIDTH : 0))/2;
+      urgentY = (ai->st.bcy + CAM_HEIGHT/2)/2;
       if ((urgentX-ai->st.old_scx)*(urgentX-ai->st.old_scx)+(urgentY-ai->st.old_scy)*(urgentY-ai->st.old_scy) > CLOSE_DIST*CLOSE_DIST) {
         obstAvoid(rx, ry, *tx, *ty,
           ai->st.old_ocx, ai->st.old_ocy,
@@ -1044,7 +1047,7 @@ inline int ssmTransC(struct RoboAI *ai){
 // If attacking and the bot's path to ball is obstructed by opponent.
 inline int ssmTransD(struct RoboAI *ai){
   return attackMode(ai) && 
-  !hasClearPath(OP_RADIUS, ai->st.old_bcx, ai->st.old_bcy, 
+  !hasClearPath(OP_RADIUS, ai->st.bcx, ai->st.bcy, 
     ai->st.old_ocx, ai->st.old_ocy,
     ai->st.old_scx, ai->st.old_scy);
 }
@@ -1063,7 +1066,7 @@ inline int ssmTransF(struct RoboAI *ai, double *qx, double *qy){
 // by the enemy, or R is obstructed.
 inline int ssmTransG(struct RoboAI *ai, double *rx, double *ry){
   return !attackMode(ai) &&
-    (!hasClearPath(OP_RADIUS, ai->st.old_bcx, ai->st.old_bcy, 
+    (!hasClearPath(OP_RADIUS, ai->st.bcx, ai->st.bcy, 
       ai->st.old_ocx, ai->st.old_ocy,
       ai->st.old_scx, ai->st.old_scy) || pointObstructed(ai, OP_RADIUS, *rx, *ry));
 }
@@ -1081,7 +1084,7 @@ inline int ssmTransH(struct RoboAI *ai, double *rx, double *ry){
     !hasClearPath(OP_RADIUS, 
       (ai->st.side ? 0 : CAM_WIDTH), CAM_HEIGHT / 2, 
       ai->st.old_ocx, ai->st.old_ocy,
-      ai->st.old_bcx, ai->st.old_bcy);
+      ai->st.bcx, ai->st.bcy);
 }
 
 // if defending and the ball's path to the enemy goal is unobstructed,
@@ -1091,13 +1094,13 @@ inline int ssmTransI(struct RoboAI *ai, double *qx, double *qy){
     hasClearPath(OP_RADIUS, 
       (ai->st.side ? 0 : CAM_WIDTH), CAM_HEIGHT / 2, 
       ai->st.old_ocx, ai->st.old_ocy,
-      ai->st.old_bcx, ai->st.old_bcy) && !pointObstructed(ai, CLOSE_DIST_MORE, *qx, *qy);
+      ai->st.bcx, ai->st.bcy) && !pointObstructed(ai, CLOSE_DIST_MORE, *qx, *qy);
 }
 
 // If the ball is within a set radius of the bot
 inline int ssmTransJ(struct RoboAI *ai){
-  double dx = ai->st.old_scx - ai->st.old_bcx;
-  double dy = ai->st.old_scy - ai->st.old_bcy;
+  double dx = ai->st.old_scx - ai->st.bcx;
+  double dy = ai->st.old_scy - ai->st.bcy;
   return dx*dx + dy*dy < CLOSE_DIST*CLOSE_DIST;
 }
 
@@ -1133,14 +1136,14 @@ inline int ssmTransM(struct RoboAI *ai, double *rx, double *ry){
 
 // If the ball is not within a set radius of the bot
 inline int ssmTransN(struct RoboAI *ai){
-  double dx = ai->st.old_scx - ai->st.old_bcx;
-  double dy = ai->st.old_scy - ai->st.old_bcy;
+  double dx = ai->st.old_scx - ai->st.bcx;
+  double dy = ai->st.old_scy - ai->st.bcy;
   return dx*dx + dy*dy > 4*CLOSE_DIST*CLOSE_DIST;
 }
 
 // If ball is obstructed by enemy. Transition into emergency defense.
 inline int ssmTransO(struct RoboAI *ai){
-  return pointObstructed(ai, OP_RADIUS, ai->st.old_bcx, ai->st.old_bcy);
+  return pointObstructed(ai, OP_RADIUS, ai->st.bcx, ai->st.bcy);
 }
 
 
@@ -1275,8 +1278,8 @@ int attackMode(struct RoboAI *ai){
   // If side is 0, meaning we are on left side, goal is on right side (x=1024)
   double vToGoalx = (ai->st.side ? 0 : CAM_WIDTH) - ai->st.old_ocx;
   double vToGoaly = CAM_HEIGHT/2 - ai->st.old_ocy;
-  double vToBallx = ai->st.old_bcx - ai->st.old_ocx;
-  double vToBally = ai->st.old_bcy - ai->st.old_ocy;
+  double vToBallx = ai->st.bcx - ai->st.old_ocx;
+  double vToBally = ai->st.bcy - ai->st.old_ocy;
   return vToGoalx*vToBallx + vToGoaly*vToBallx > 0;
 }
 
@@ -1302,11 +1305,11 @@ int pointObstructed(struct RoboAI *ai, int size, double px, double py){
  * backoffDist: the distance that should be between q and ball. 
 */
 void findQ(struct RoboAI *ai, double *qx, double *qy, int backoffDist){
-  double vx = ai->st.old_bcx - (ai->st.side ? 0 : CAM_WIDTH);
-  double vy = ai->st.old_bcy - CAM_HEIGHT / 2;
+  double vx = ai->st.bcx - (ai->st.side ? 0 : CAM_WIDTH);
+  double vy = ai->st.bcy - CAM_HEIGHT / 2;
   double vmag = sqrt(vx*vx + vy*vy);
-  *qx = ai->st.old_bcx + backoffDist*vx/vmag;
-  *qy = ai->st.old_bcy + backoffDist*vy/vmag;
+  *qx = ai->st.bcx + backoffDist*vx/vmag;
+  *qy = ai->st.bcy + backoffDist*vy/vmag;
 }
 
 /**
@@ -1369,10 +1372,11 @@ void findDefendPoint(struct RoboAI *ai, double *rx, double *ry, int size, int ba
   obstAvoid(rx, ry, 
     ai->st.side ? 0 : CAM_WIDTH, CAM_HEIGHT / 2, 
     ai->st.old_ocx, ai->st.old_ocy, 
-    ai->st.old_bcx, ai->st.old_bcy, 
+    ai->st.bcx, ai->st.bcy, 
     size);
   double rMag = sqrt((*rx)*(*rx) + (*ry)*(*ry));
-  *rx = ai->st.old_bcx - backoffDist/rMag*(*rx);
-  *ry = ai->st.old_bcy - backoffDist/rMag*(*ry);
+  *rx = ai->st.bcx - backoffDist/rMag*(*rx);
+  *ry = ai->st.bcy - backoffDist/rMag*(*ry);
   //printf("rx: %f, ry: %f\n", *rx, *ry);
 }
+ 

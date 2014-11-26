@@ -64,6 +64,7 @@ struct AI_data{
     // separately. So we keep old location to estimate v
     struct blob *ball;      // Current ball blob
     double old_bcx, old_bcy;// Previous ball cx,cy
+    double bcx, bcy; // A predicted position of the ball.
     double bvx,bvy;         // Ball velocity vector
     double bmx,bmy;         // Ball heading
     int satisfactionCount;  // Used to determine whether the ball is truly in motion.
