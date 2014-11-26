@@ -145,7 +145,7 @@ void penaltySM(struct RoboAI *ai);
 void soccerSM(struct RoboAI *ai);
 
 inline void soccerSMTrans(struct RoboAI *ai, double *Rx, double *Ry, double *qx, double*qy);
-inline int ssmTransC(struct RoboAI *ai);
+inline int ssmTransC(double px, double py);
 inline int ssmTransD(struct RoboAI *ai);
 inline int ssmTransE(struct RoboAI *ai, double *qx, double *qy);
 inline int ssmTransF(struct RoboAI *ai, double *qx, double *qy);
@@ -156,6 +156,8 @@ inline int ssmTransJ(struct RoboAI *ai);
 inline int ssmTransK(struct RoboAI *ai);
 inline int ssmTransL(struct RoboAI *ai, double *qx, double *qy);
 inline int ssmTransM(struct RoboAI *ai, double *rx, double *ry);
+inline int ssmTransN(struct RoboAI *ai, double multiple);
+inline int ssmTransO(struct RoboAI *ai);
 
 void moveInDirection(struct RoboAI *ai, double x, double y, int pivot, int minSpeed);
 void moveAndKick(struct RoboAI *ai, int speed);
