@@ -46,7 +46,7 @@
 #define OP_RADIUS OP_LEN/2*PX_PER_CM + SELF_LEN/2*PX_PER_CM
 
 
-#define SD 140 // Unit of distance, where each distance of SD implies a change in movement speed.
+#define SD 120 // Unit of distance, where each distance of SD implies a change in movement speed.
 #define BALL_RADIUS 90 // Distance to swerve around the ball in order to kick backwards
 #define Q_DIST 120 //130
 #define R_DIST 150
@@ -811,17 +811,17 @@ void soccerSM(struct RoboAI *ai){
       obstAvoid(rx, ry, *qx, *qy,
         ai->st.old_bcx, ai->st.old_bcy,
         ai->st.old_scx, ai->st.old_scy, BALL_RADIUS);
-      moveInDirection(ai, *rx, *ry, 0, 30);
+      moveInDirection(ai, *rx, *ry, 0, 35);
     break;
     case 4: // Attack, chase ball kick
-      moveAndKick(ai, 40);
+      moveAndKick(ai, 50);
     break;
     case 5: // Attack, shoot align
       stop_kicker();
-      moveInDirection(ai, ai->st.old_bcx, ai->st.old_bcy, 1, 30);
+      moveInDirection(ai, ai->st.old_bcx, ai->st.old_bcy, 1, 35);
     break;
     case 6: // Attacking shoot kick
-      moveAndKick(ai, 40);
+      moveAndKick(ai, 50);
     break;
     case 7: // Defend, avoid enemy.
       stop_kicker();
@@ -848,17 +848,17 @@ void soccerSM(struct RoboAI *ai){
       obstAvoid(rx, ry, *qx, *qy,
         ai->st.old_bcx, ai->st.old_bcy,
         ai->st.old_scx, ai->st.old_scy, BALL_RADIUS);
-      moveInDirection(ai, *rx, *ry, 0, 30);
+      moveInDirection(ai, *rx, *ry, 0, 35);
     break;
     case 10: // Defend, block ball kick
-      moveAndKick(ai, 40);
+      moveAndKick(ai, 50);
     break;
     case 11: // Defend, counter-attack align.
       stop_kicker();
-      moveInDirection(ai, ai->st.old_bcx, ai->st.old_bcy, 1, 30);
+      moveInDirection(ai, ai->st.old_bcx, ai->st.old_bcy, 1, 35);
     break;
     case 12: // Defend, counter-attack kick.
-      moveAndKick(ai, 40);
+      moveAndKick(ai, 50);
     break;
     case 13: // Emergency defense. Move between ball and self goal.
       findQ(ai, qx, qy, Q_DIST);
@@ -898,7 +898,7 @@ inline void soccerSMTrans(struct RoboAI *ai, double *Rx, double *Ry, double *qx,
   switch(ai->st.state){
     case 0: // Choose mode.
       if (!ai->st.selfID) ai->st.state = 99;
-      else if (!ai->st.ballID || !ai->st.oppID) ai->st.state = 98;
+      else if (!ai->st.ballID) ai->st.state = 98;
       else if (ssmTransO(ai)) ai->st.state = 13;
       else if (ssmTransD(ai)) ai->st.state = 1;
       else if (ssmTransE(ai, qx, qy)) ai->st.state = 2;
@@ -909,7 +909,7 @@ inline void soccerSMTrans(struct RoboAI *ai, double *Rx, double *Ry, double *qx,
     break;
     case 1: // Attack, avoid opponent.
       if (!ai->st.selfID) ai->st.state = 99;
-      else if (!ai->st.ballID || !ai->st.oppID) ai->st.state = 98;
+      else if (!ai->st.ballID) ai->st.state = 98;
       else if (ssmTransO(ai)) ai->st.state = 13;
       else if (ssmTransD(ai)) ai->st.state = 1;
       else if (ssmTransE(ai, qx, qy)) ai->st.state = 2;
@@ -920,7 +920,7 @@ inline void soccerSMTrans(struct RoboAI *ai, double *Rx, double *Ry, double *qx,
     break;
     case 2: // Attack, chase the ball.
       if (!ai->st.selfID) ai->st.state = 99;
-      else if (!ai->st.ballID || !ai->st.oppID) ai->st.state = 98;
+      else if (!ai->st.ballID) ai->st.state = 98;
       else if (ssmTransO(ai)) ai->st.state = 13;
       else if (ssmTransJ(ai)) ai->st.state = 4;
       else if (ssmTransD(ai)) ai->st.state = 1;
@@ -932,7 +932,7 @@ inline void soccerSMTrans(struct RoboAI *ai, double *Rx, double *Ry, double *qx,
     break;
     case 3: // Attack, prepare to shoot.
       if (!ai->st.selfID) ai->st.state = 99;
-      else if (!ai->st.ballID || !ai->st.oppID) ai->st.state = 98;
+      else if (!ai->st.ballID) ai->st.state = 98;
       else if (ssmTransO(ai)) ai->st.state = 13;
       else if (ssmTransL(ai, qx, qy)) ai->st.state = 5;
       else if (ssmTransD(ai)) ai->st.state = 1;
@@ -956,12 +956,12 @@ inline void soccerSMTrans(struct RoboAI *ai, double *Rx, double *Ry, double *qx,
     break;
     case 6: // Attacking shoot kick
       if (!ai->st.selfID) ai->st.state = 99;
-      else if (!ai->st.ballID || !ai->st.oppID) ai->st.state = 98;
+      else if (!ai->st.ballID) ai->st.state = 98;
       else if (ssmTransK(ai)) ai->st.state = 3;
     break;
     case 7: // Defend, avoid enemy.
       if (!ai->st.selfID) ai->st.state = 99;
-      else if (!ai->st.ballID || !ai->st.oppID) ai->st.state = 98;
+      else if (!ai->st.ballID) ai->st.state = 98;
       else if (ssmTransO(ai)) ai->st.state = 13;
       else if (ssmTransD(ai)) ai->st.state = 1;
       else if (ssmTransE(ai, qx, qy)) ai->st.state = 2;
@@ -972,7 +972,7 @@ inline void soccerSMTrans(struct RoboAI *ai, double *Rx, double *Ry, double *qx,
     break;
     case 8: // Defend, move to R.
       if (!ai->st.selfID) ai->st.state = 99;
-      else if (!ai->st.ballID || !ai->st.oppID) ai->st.state = 98;
+      else if (!ai->st.ballID) ai->st.state = 98;
       else if (ssmTransO(ai)) ai->st.state = 13;
       else if (ssmTransM(ai, Rx, Ry)) ai->st.state = 11;
       else if (ssmTransJ(ai)) ai->st.state = 11;
@@ -984,7 +984,7 @@ inline void soccerSMTrans(struct RoboAI *ai, double *Rx, double *Ry, double *qx,
     break;
     case 9: // Defend, move to Q.
       if (!ai->st.selfID) ai->st.state = 99;
-      else if (!ai->st.ballID || !ai->st.oppID) ai->st.state = 98;
+      else if (!ai->st.ballID) ai->st.state = 98;
       else if (ssmTransO(ai)) ai->st.state = 13;
       else if (ssmTransL(ai, qx, qy)) ai->st.state = 11; // FIXED: Should use Q instead of R
       else if (ssmTransD(ai)) ai->st.state = 1;
@@ -996,25 +996,25 @@ inline void soccerSMTrans(struct RoboAI *ai, double *Rx, double *Ry, double *qx,
     break;
     case 10: // Defend, block ball kick
       if (!ai->st.selfID) ai->st.state = 99;
-      else if (!ai->st.ballID || !ai->st.oppID) ai->st.state = 98;
+      else if (!ai->st.ballID) ai->st.state = 98;
       else if (ssmTransN(ai)) ai->st.state = 2; //FIXED: Kick failed
       else if (ssmTransK(ai)) ai->st.state = 9;
     break;
     case 11: // Defend, counter-attack align.
       if (!ai->st.selfID) ai->st.state = 99;
-      else if (!ai->st.ballID || !ai->st.oppID) ai->st.state = 98;
+      else if (!ai->st.ballID) ai->st.state = 98;
       else if (ssmTransN(ai)) ai->st.state = 2; //FIXED: Kick failed
       else if (ssmTransJ(ai)) ai->st.state = 12;
     break;
     case 12: // Defend, counter-attack kick.
       if (!ai->st.selfID) ai->st.state = 99;
-      else if (!ai->st.ballID || !ai->st.oppID) ai->st.state = 98;
+      else if (!ai->st.ballID) ai->st.state = 98;
       else if (ssmTransN(ai)) ai->st.state = 2; //FIXED: Kick failed
       else if (ssmTransK(ai)) ai->st.state = 9;
     break;
     case 13: // Emergency defense. Move between ball and self goal.
       if (!ai->st.selfID) ai->st.state = 99;
-      else if (!ai->st.ballID || !ai->st.oppID) ai->st.state = 98;
+      else if (!ai->st.ballID) ai->st.state = 98;
       else if (ssmTransO(ai)) ai->st.state = 13;
       else if (ssmTransD(ai)) ai->st.state = 1;
       else if (ssmTransE(ai, qx, qy)) ai->st.state = 2;
@@ -1025,11 +1025,12 @@ inline void soccerSMTrans(struct RoboAI *ai, double *Rx, double *Ry, double *qx,
     break;
     case 98: // Ball missing
       if (!ai->st.selfID) ai->st.state = 99;
-      else if (ai->st.ballID && ai->st.oppID) ai->st.state = 1;
+      else if (ai->st.ballID) ai->st.state = 1;
       else if (ssmTransC(ai)) ai->st.state = 99;
     break;
     case 99: // Game "finished"
-      if (ai->st.selfID && ai->st.ballID && ai->st.oppID) ai->st.state = 1;
+      if (ai->st.selfID && ai->st.ballID) ai->st.state = 98;
+      // 98 will fix heading by moving backwards for one iteration.
     break;
   }
 }
@@ -1177,7 +1178,7 @@ void moveInDirection(struct RoboAI *ai, double x, double y, int pivot, int minSp
   // angle = angle * 180/M_PI; // Convert to deg for now.
   // angle = angle > 180 
   // If oriented, more forward. 
-  int rotSpeed = (angle > 0) ? (int)(10 + angle/4) : (int)(-10 + angle/4);
+  int rotSpeed = (angle > 0) ? (int)(15 + angle/3) : (int)(-15 + angle/3);
   // printf("Angle: %f, rSpeed: %d\n", angle, rotSpeed);
   if (fabs(angle) <= 10){
     drive_speed(-actualSpeed);
